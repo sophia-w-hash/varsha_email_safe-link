@@ -10,52 +10,16 @@ app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-const emailTracker = {};
-
-// Helper: Sleep function for human-like delay
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Helper: Generate zero-width invisible unique fingerprint to defeat duplicate detection
-function injectSpamProtectionFingerprint(content) {
-    const zeroWidthChars = ['\u200B', '\u200C', '\u200D', '\uFEFF'];
-    let fingerprint = '';
-    for (let i = 0; i < 10; i++) {
-        fingerprint += zeroWidthChars[Math.floor(Math.random() * zeroWidthChars.length)];
-    }
-    
-    // Inject invisible fingerprint into HTML or Plain Text
-    if (/<[a-z][\s\S]*>/i.test(content)) {
-        return content + `<span style="display:none !important; font-size:0px; line-height:0px; opacity:0;">${fingerprint}</span>`;
-    }
-    return content + fingerprint;
-}
-
-// Helper: Clean & Sanitize Subject/Body for Max Inbox Delivery
-function sanitizeContent(text) {
-    if (!text) return '';
-    // Prevent trigger words from locking into spam
-    return text.replace(/\b(100% free|make money|click here now|guaranteed|cash bonus|unbelievable)\b/gi, (match) => {
-        return match.split('').join('\u200B'); // Insert invisible zero-width space in bad keywords
-    });
-}
-
-function checkAndTrackLimit(senderEmail, countToAdd) {
-    const now = Date.now();
-    const ONE_HOUR = 3600000;
-
-    if (!emailTracker[senderEmail]) {
-        emailTracker[senderEmail] = { count: 0, startTime: now };
-    }
-
-    if (now - emailTracker[senderEmail].startTime > ONE_HOUR) {
-        emailTracker[senderEmail] = { count: 0, startTime: now };
-    }
-
-    if (emailTracker[senderEmail].count + countToAdd > 450) {
-        return false;
-    }
-
-    return true;
+// Generate unique plain-text version from HTML
+function convertToPlainText(html) {
+    if (!html) return '';
+    return html
+        .replace(/<br\s*[\/]?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n\n')
+        .replace(/<[^>]*>/g, '')
+        .trim();
 }
 
 app.post('/api/send-direct', async (req, res) => {
@@ -63,17 +27,17 @@ app.post('/api/send-direct', async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    const { gmailUser, appPass, emailListText, subject, body, spamProtection = true } = req.body;
+    const { gmailUser, appPass, emailListText, subject, body } = req.body;
 
     if (!gmailUser || !appPass) {
-        res.write(`data: ${JSON.stringify({ error: "Gmail Address ya App Password galat hai! ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Gmail Address ya App Password missing hai! ❌" })}\n\n`);
         return res.end();
     }
 
     const cleanUser = gmailUser.trim().toLowerCase();
     const cleanPass = appPass.replace(/\s+/g, '');
     const senderDomain = cleanUser.split('@')[1] || 'gmail.com';
-    const displayName = cleanUser.split('@')[0];
+    const senderName = cleanUser.split('@')[0];
 
     const emails = emailListText
         .split(/[\n,\s]+/)
@@ -81,36 +45,29 @@ app.post('/api/send-direct', async (req, res) => {
         .filter(e => e.includes('@') && e.includes('.'));
 
     if (emails.length === 0) {
-        res.write(`data: ${JSON.stringify({ error: "Koyi valid email address nahi mila! ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Koyi valid recipient email nahi mila! ❌" })}\n\n`);
         return res.end();
     }
 
-    if (!checkAndTrackLimit(cleanUser, emails.length)) {
-        res.write(`data: ${JSON.stringify({ error: "Hourly Limit Exceeded (Max 450/hr allowed) ❌" })}\n\n`);
-        return res.end();
-    }
-
-    // SMTP Transporter configuration optimized for Primary Inbox
+    // High Trust Pool Connection
     const transporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',
-        port: 465,
-        secure: true, // SSL connection for high trust score
-        pool: true,
-        maxConnections: 1,
-        maxMessages: 100,
+        port: 587,
+        secure: false, // TLS Start
+        requireTLS: true,
         auth: {
             user: cleanUser,
             pass: cleanPass
         },
         tls: {
-            rejectUnauthorized: false
+            ciphers: 'SSLv3'
         }
     });
 
     try {
         await transporter.verify();
     } catch (authError) {
-        res.write(`data: ${JSON.stringify({ error: "Authentication Failed! App Password check karein. ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "SMTP Authentication Failed! App Password check karein. ❌" })}\n\n`);
         return res.end();
     }
 
@@ -118,54 +75,55 @@ app.post('/api/send-direct', async (req, res) => {
     let failedCount = 0;
     let processedSoFar = 0;
 
-    const isHtmlContent = /<[a-z][\s\S]*>/i.test(body);
-    const sanitizedSubject = spamProtection ? sanitizeContent(subject) : subject;
-    const baseBody = spamProtection ? sanitizeContent(body) : body;
+    const isHtml = /<[a-z][\s\S]*>/i.test(body);
 
-    // Send emails sequentially with Anti-Spam protection
     for (let i = 0; i < emails.length; i++) {
         const recipient = emails[i];
-        const uniqueMessageId = `${crypto.randomBytes(8).toString('hex')}.${Date.now()}@${senderDomain}`;
+        const recipientDomain = recipient.split('@')[1] || 'client.com';
+        const uniqueToken = crypto.randomBytes(8).toString('hex');
         
-        // Dynamic uniquely fingerprinted body per recipient
-        let finalBody = spamProtection ? injectSpamProtectionFingerprint(baseBody) : baseBody;
+        // Zero-Width space injection to avoid hash-matching spam filters across external recipients
+        const zeroWidthSpace = '\u200B';
+        const randomizedBody = body + zeroWidthSpace.repeat(Math.floor(Math.random() * 5) + 1);
 
-        let htmlPayload = isHtmlContent 
-            ? finalBody 
-            : `<div style="font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1f2937; line-height: 1.6;">${finalBody.replace(/\n/g, '<br>')}</div>`;
+        const htmlContent = isHtml 
+            ? randomizedBody 
+            : `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 15px; color: #1f2937; line-height: 1.6;">${randomizedBody.replace(/\n/g, '<br>')}</div>`;
 
-        const plainText = finalBody.replace(/<[^>]*>?/gm, '').trim();
+        const plainTextContent = convertToPlainText(randomizedBody);
 
         const mailOptions = {
-            from: `"${displayName}" <${cleanUser}>`,
+            from: `"${senderName}" <${cleanUser}>`,
             to: recipient,
-            subject: sanitizedSubject,
-            text: plainText,
-            html: htmlPayload,
+            subject: subject,
+            text: plainTextContent,
+            html: htmlContent,
             headers: {
-                'Message-ID': `<${uniqueMessageId}>`,
-                'X-Mailer': 'Apple Mail (2.3654.120.8)',
-                'X-Report-Abuse-To': `<mailto:abuse@${senderDomain}>`,
-                'List-Unsubscribe': `<mailto:${cleanUser}?subject=unsubscribe>`,
-                'Auto-Submitted': 'auto-generated'
+                // High deliverability headers for external clients
+                'Message-ID': `<${uniqueToken}-${Date.now()}@${senderDomain}>`,
+                'X-Mailer': 'Outlook-Express/7.0 (MSN 10.0)',
+                'X-Priority': '3',
+                'X-MSMail-Priority': 'Normal',
+                'List-Unsubscribe': `<mailto:${cleanUser}?subject=Unsubscribe-${uniqueToken}>`,
+                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+                'X-Complaints-To': `mailto:abuse@${senderDomain}`
             }
         };
 
         try {
             await transporter.sendMail(mailOptions);
             successCount++;
-            emailTracker[cleanUser].count++;
         } catch (err) {
-            console.error(`Failed sending to ${recipient}:`, err.message);
+            console.error(`Failed delivery to ${recipient}:`, err.message);
             failedCount++;
         } finally {
             processedSoFar++;
             res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
         }
 
-        // Delay algorithm: 400ms - 800ms jitter delay to simulate real human dispatch
+        // Delay algorithm: 500ms - 1000ms delay per client email
         if (i < emails.length - 1) {
-            const delay = Math.floor(Math.random() * 400) + 400;
+            const delay = Math.floor(Math.random() * 500) + 500;
             await sleep(delay);
         }
     }
