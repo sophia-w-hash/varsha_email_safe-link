@@ -66,7 +66,7 @@ app.post('/api/send-direct', async (req, res) => {
     const transporter = nodemailer.createTransport({
         service: 'gmail',
         pool: true,
-        maxConnections: 6,
+        maxConnections: 3,
         maxMessages: 100,
         rateDelta: 1000,
         auth: {
