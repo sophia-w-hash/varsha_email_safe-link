@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fast Bulk Email Dispatcher - Pro</title>
+    <title>Fast Bulk Email Dispatcher</title>
     <style>
         * {
             box-sizing: border-box;
@@ -20,6 +20,41 @@
             min-height: 100vh;
             padding: 20px;
         }
+
+        /* Password Lock Overlay */
+        .lock-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #f8fafc;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        .lock-card {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+            border: 1px solid #e2e8f0;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        .lock-card h3 {
+            margin-bottom: 10px;
+            color: #0284c7;
+            font-size: 22px;
+        }
+        .lock-card p {
+            font-size: 14px;
+            color: #64748b;
+            margin-bottom: 20px;
+        }
+
         .container {
             background-color: #ffffff;
             padding: 35px;
@@ -28,6 +63,7 @@
             width: 100%;
             max-width: 680px;
             border: 1px solid #e2e8f0;
+            display: none;
         }
         h2 {
             text-align: center;
@@ -68,7 +104,8 @@
         .row .form-group {
             flex: 1;
         }
-        .spam-protection-box {
+        /* Permanent Locked Spam Protection Badge */
+        .spam-protection-locked {
             background-color: #f0fdf4;
             border: 1px solid #bbf7d0;
             padding: 12px 16px;
@@ -78,7 +115,7 @@
             align-items: center;
             justify-content: space-between;
         }
-        .spam-protection-box span {
+        .spam-protection-locked span {
             font-size: 14px;
             font-weight: 600;
             color: #15803d;
@@ -86,14 +123,15 @@
             align-items: center;
             gap: 8px;
         }
-        .badge {
+        .badge-locked {
             background-color: #16a34a;
             color: white;
             font-size: 11px;
-            padding: 3px 8px;
+            padding: 4px 10px;
             border-radius: 12px;
             text-transform: uppercase;
             font-weight: 700;
+            letter-spacing: 0.5px;
         }
         button {
             width: 100%;
@@ -161,7 +199,21 @@
 </head>
 <body>
 
-<div class="container">
+<!-- Lock Screen -->
+<div class="lock-screen" id="lockScreen">
+    <div class="lock-card">
+        <h3>Protected Access 🔒</h3>
+        <p>Please enter the access password to continue.</p>
+        <div class="form-group">
+            <input type="password" id="accessPassInput" placeholder="Enter Access Password" required>
+        </div>
+        <button id="loginBtn" onclick="verifyAccess()">Unlock App</button>
+        <div class="alert alert-error" id="lockError" style="margin-top: 12px;">Wrong Password! ❌</div>
+    </div>
+</div>
+
+<!-- Main Dashboard -->
+<div class="container" id="mainContainer">
     <h2>Fast Bulk Email Dispatcher</h2>
 
     <form id="emailForm">
@@ -191,12 +243,10 @@
             <textarea id="body" rows="6" placeholder="Type plain text or paste full HTML template code here..." required></textarea>
         </div>
 
-        <div class="spam-protection-box">
-            <span>🛡️ Anti-Spam Inbox Shield <span class="badge">AUTO-ACTIVE</span></span>
-            <label style="margin: 0; cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                <input type="checkbox" id="spamProtectionToggle" checked style="width: 18px; height: 18px; accent-color: #16a34a;">
-                <span style="font-size: 13px; color: #166534; font-weight: bold;">Auto Anti-Spam</span>
-            </label>
+        <!-- Locked & Non-Clickable Anti-Spam Protection Indicator -->
+        <div class="spam-protection-locked">
+            <span>🛡️ Anti-Spam Inbox Shield</span>
+            <span class="badge-locked">LOCKED &amp; ACTIVE</span>
         </div>
 
         <button type="submit" id="sendBtn">Send Emails Now</button>
@@ -206,7 +256,7 @@
         <div class="progress-bar-bg">
             <div class="progress-bar-fill" id="progressFill"></div>
         </div>
-        <div class="status-text" id="statusText">Preparing delivery...</div>
+        <div class="status-text" id="statusText">Verifying credentials &amp; preparing delivery...</div>
     </div>
 
     <div class="alert alert-error" id="errorAlert"></div>
@@ -214,6 +264,36 @@
 </div>
 
 <script>
+    const CORRECT_ACCESS_PASS = "##";
+
+    const lockScreen = document.getElementById('lockScreen');
+    const mainContainer = document.getElementById('mainContainer');
+    const accessPassInput = document.getElementById('accessPassInput');
+    const lockError = document.getElementById('lockError');
+
+    function verifyAccess() {
+        const enteredPass = accessPassInput.value;
+        if (enteredPass === CORRECT_ACCESS_PASS) {
+            lockScreen.style.display = 'none';
+            mainContainer.style.display = 'block';
+            sessionStorage.setItem('isAppUnlocked', 'true');
+        } else {
+            lockError.style.display = 'block';
+            accessPassInput.value = '';
+        }
+    }
+
+    if (sessionStorage.getItem('isAppUnlocked') === 'true') {
+        lockScreen.style.display = 'none';
+        mainContainer.style.display = 'block';
+    }
+
+    accessPassInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            verifyAccess();
+        }
+    });
+
     const form = document.getElementById('emailForm');
     const sendBtn = document.getElementById('sendBtn');
     const progressBox = document.getElementById('progressBox');
@@ -231,15 +311,14 @@
         sendBtn.disabled = true;
         progressBox.style.display = 'block';
         progressFill.style.width = '0%';
-        statusText.innerText = 'Connecting to server...';
+        statusText.innerText = 'Verifying credentials & preparing delivery...';
 
         const payload = {
             gmailUser: document.getElementById('gmailUser').value,
             appPass: document.getElementById('appPass').value,
             emailListText: document.getElementById('emailListText').value,
             subject: document.getElementById('subject').value,
-            body: document.getElementById('body').value,
-            spamProtection: document.getElementById('spamProtectionToggle').checked
+            body: document.getElementById('body').value
         };
 
         try {
@@ -277,7 +356,7 @@
                         if (data.progress) {
                             const percent = Math.round((data.sent / data.total) * 100);
                             progressFill.style.width = percent + '%';
-                            statusText.innerText = `Sent ${data.sent} of ${data.total} emails (${percent}%)`;
+                            statusText.innerText = `Sending: ${data.sent} of ${data.total} emails (${percent}%)`;
                         }
 
                         if (data.completed) {
