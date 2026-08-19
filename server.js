@@ -32,9 +32,8 @@ function checkAndTrackLimit(senderEmail, countToAdd) {
     return true;
 }
 
-// SSE Live Progress Endpoint
+// Single-Email Level LIVE Stream Endpoint
 app.post('/api/send-direct', async (req, res) => {
-    // SSE Stream Headers
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -82,58 +81,46 @@ app.post('/api/send-direct', async (req, res) => {
         return res.end();
     }
 
-    const BATCH_SIZE = 6;
     let successCount = 0;
     let failedCount = 0;
+    let processedSoFar = 0;
 
-    for (let i = 0; i < emails.length; i += BATCH_SIZE) {
-        const currentBatch = emails.slice(i, i + BATCH_SIZE);
-
-        const promises = currentBatch.map(async (recipient) => {
-            const randomMsgId = `<${crypto.randomBytes(16).toString('hex')}@gmail.com>`;
-            
-            const mailOptions = {
-                from: `"${displayName}" <${cleanUser}>`,
-                to: recipient,
-                subject: subject,
-                text: body,
-                headers: {
-                    "X-Priority": "3",
-                    "X-MSMail-Priority": "Normal",
-                    "Importance": "Normal",
-                    "Message-ID": randomMsgId,
-                    "List-Unsubscribe": `<mailto:${cleanUser}?subject=unsubscribe>`
-                }
-            };
-
-            try {
-                await transporter.sendMail(mailOptions);
-                return true;
-            } catch (err) {
-                return false;
+    // Loop through emails individually to stream live 1-by-1 increments
+    for (let i = 0; i < emails.length; i++) {
+        const recipient = emails[i];
+        const randomMsgId = `<${crypto.randomBytes(16).toString('hex')}@gmail.com>`;
+        
+        const mailOptions = {
+            from: `"${displayName}" <${cleanUser}>`,
+            to: recipient,
+            subject: subject,
+            text: body,
+            headers: {
+                "X-Priority": "3",
+                "X-MSMail-Priority": "Normal",
+                "Importance": "Normal",
+                "Message-ID": randomMsgId,
+                "List-Unsubscribe": `<mailto:${cleanUser}?subject=unsubscribe>`
             }
-        });
+        };
 
-        const results = await Promise.all(promises);
-        results.forEach(res => {
-            if (res) {
-                successCount++;
-                emailTracker[cleanUser].count++;
-            } else {
-                failedCount++;
-            }
-        });
-
-        // Send LIVE Progress Update to Frontend
-        const sentSoFar = Math.min(i + BATCH_SIZE, emails.length);
-        res.write(`data: ${JSON.stringify({ progress: true, sent: sentSoFar, total: emails.length })}\n\n`);
-
-        if (i + BATCH_SIZE < emails.length) {
-            await sleep(2500);
+        try {
+            await transporter.sendMail(mailOptions);
+            successCount++;
+            emailTracker[cleanUser].count++;
+        } catch (err) {
+            failedCount++;
         }
+
+        processedSoFar++;
+
+        // Send instant SSE event after each single email
+        res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
+
+        // Natural delay between sends for high inbox delivery
+        await sleep(600);
     }
 
-    // Final Success Response
     res.write(`data: ${JSON.stringify({ completed: true, total: emails.length, delivered: successCount, failed: failedCount })}\n\n`);
     res.end();
 });
