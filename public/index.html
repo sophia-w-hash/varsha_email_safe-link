@@ -6,7 +6,7 @@
     <title>Bulk Mail Sender Dashboard</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eef2f5; margin: 0; padding: 20px; }
-        .card { max-width: 600px; background: #fff; padding: 25px; border-radius: 10px; margin: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+        .card { max-width: 650px; background: #fff; padding: 25px; border-radius: 10px; margin: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
         h2 { margin-top: 0; color: #333; text-align: center; }
         label { font-weight: 600; display: block; margin-top: 12px; color: #444; }
         input, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
@@ -36,8 +36,8 @@
             </div>
         </div>
 
-        <label>Upload CSV File (Column name must be 'email'):</label>
-        <input type="file" id="csvFile" accept=".csv" required>
+        <label>Paste Client Emails (Comma, Space ya New Line me paste karein):</label>
+        <textarea id="emailListText" rows="4" placeholder="client1@gmail.com&#10;client2@gmail.com&#10;client3@gmail.com" required></textarea>
 
         <label>Subject:</label>
         <input type="text" id="subject" placeholder="Enter Subject" required>
@@ -62,19 +62,21 @@
         btn.innerText = "Sending Mails in Batches...";
         status.style.display = "block";
         status.className = "success";
-        status.innerText = "Mails process ho rahe hain, har batch me 6 mails delivered hongi...";
+        status.innerText = "Emails process ho rahe hain...";
 
-        const formData = new FormData();
-        formData.append('gmailUser', document.getElementById('gmailUser').value);
-        formData.append('appPass', document.getElementById('appPass').value);
-        formData.append('csvFile', document.getElementById('csvFile').files[0]);
-        formData.append('subject', document.getElementById('subject').value);
-        formData.append('body', document.getElementById('body').value);
+        const payload = {
+            gmailUser: document.getElementById('gmailUser').value,
+            appPass: document.getElementById('appPass').value,
+            emailListText: document.getElementById('emailListText').value,
+            subject: document.getElementById('subject').value,
+            body: document.getElementById('body').value
+        };
 
         try {
-            const res = await fetch('/api/send-csv', {
+            const res = await fetch('/api/send-direct', {
                 method: 'POST',
-                body: formData
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
             });
 
             const data = await res.json();
