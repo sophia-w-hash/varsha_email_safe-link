@@ -1,8 +1,5 @@
 const express = require('express');
 const nodemailer = require('nodemailer');
-const multer = require('multer');
-const csv = require('csv-parser');
-const fs = require('fs');
 const path = require('path');
 
 const app = express();
@@ -12,7 +9,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-const upload = multer({ dest: 'uploads/' });
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Batch Processing Engine
@@ -21,7 +17,6 @@ async function processBatchEmails(emailList, subject, htmlBody, userEmail, appPa
     let successCount = 0;
     let failedCount = 0;
 
-    // Transporter dynamic user input se banega
     const transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
@@ -70,49 +65,36 @@ async function processBatchEmails(emailList, subject, htmlBody, userEmail, appPa
     return { successCount, failedCount };
 }
 
-// API Route
-app.post('/api/send-csv', upload.single('csvFile'), (req, res) => {
-    const { gmailUser, appPass, subject, body } = req.body;
-    const filePath = req.file?.path;
+// Direct Text Paste API Endpoint
+app.post('/api/send-direct', async (req, res) => {
+    const { gmailUser, appPass, emailListText, subject, body } = req.body;
 
     if (!gmailUser || !appPass) {
-        if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
         return res.status(400).json({ error: "Gmail User aur App Password zaroori hain." });
     }
 
-    if (!filePath) {
-        return res.status(400).json({ error: "Kripya CSV file upload karein." });
+    if (!emailListText || emailListText.trim() === '') {
+        return res.status(400).json({ error: "Kripya emails paste karein." });
     }
 
     const cleanPass = appPass.replace(/\s+/g, '');
-    const emails = [];
 
-    fs.createReadStream(filePath)
-        .pipe(csv())
-        .on('data', (row) => {
-            const email = row.email || row.Email || row.EMAIL;
-            if (email && email.includes('@')) {
-                emails.push(email.trim());
-            }
-        })
-        .on('end', async () => {
-            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    // Convert pasted text (comma, newline, space separated) into an array of valid emails
+    const emails = emailListText
+        .split(/[\n,\s]+/)
+        .map(e => e.trim())
+        .filter(e => e.includes('@') && e.includes('.'));
 
-            if (emails.length === 0) {
-                return res.status(400).json({ error: "CSV me koi 'email' column nahi mila." });
-            }
+    if (emails.length === 0) {
+        return res.status(400).json({ error: "Koi sahi email ID nahi mili." });
+    }
 
-            try {
-                const summary = await processBatchEmails(emails, subject, body, gmailUser, cleanPass);
-                res.json({ message: "Completed", totalFound: emails.length, details: summary });
-            } catch (error) {
-                res.status(500).json({ error: "Sending Failed: " + error.message });
-            }
-        })
-        .on('error', (err) => {
-            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-            res.status(500).json({ error: "CSV reading error: " + err.message });
-        });
+    try {
+        const summary = await processBatchEmails(emails, subject, body, gmailUser, cleanPass);
+        res.json({ message: "Completed", totalFound: emails.length, details: summary });
+    } catch (error) {
+        res.status(500).json({ error: "Sending Failed: " + error.message });
+    }
 });
 
 app.listen(PORT, () => {
