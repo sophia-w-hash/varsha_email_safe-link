@@ -6,12 +6,11 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const emailTracker = {};
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 function checkAndTrackLimit(senderEmail, countToAdd) {
     const now = Date.now();
@@ -25,7 +24,7 @@ function checkAndTrackLimit(senderEmail, countToAdd) {
         emailTracker[senderEmail] = { count: 0, startTime: now };
     }
 
-    if (emailTracker[senderEmail].count + countToAdd > 25) {
+    if (emailTracker[senderEmail].count + countToAdd > 500) {
         return false;
     }
 
@@ -40,7 +39,7 @@ app.post('/api/send-direct', async (req, res) => {
     const { gmailUser, appPass, emailListText, subject, body } = req.body;
 
     if (!gmailUser || !appPass) {
-        res.write(`data: ${JSON.stringify({ error: "Wrong Password ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Wrong Password or Credentials ❌" })}\n\n`);
         return res.end();
     }
 
@@ -59,12 +58,17 @@ app.post('/api/send-direct', async (req, res) => {
     }
 
     if (!checkAndTrackLimit(cleanUser, emails.length)) {
-        res.write(`data: ${JSON.stringify({ error: "Mail Limit Full ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Hourly Mail Limit Exceeded ❌" })}\n\n`);
         return res.end();
     }
 
+    // High-Speed Transport Engine
     const transporter = nodemailer.createTransport({
         service: 'gmail',
+        pool: true,
+        maxConnections: 10,
+        maxMessages: 100,
+        rateDelta: 1000,
         auth: {
             user: cleanUser,
             pass: cleanPass
@@ -74,7 +78,7 @@ app.post('/api/send-direct', async (req, res) => {
     try {
         await transporter.verify();
     } catch (authError) {
-        res.write(`data: ${JSON.stringify({ error: "Wrong Password ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Authentication Failed (Wrong Password/App Pass) ❌" })}\n\n`);
         return res.end();
     }
 
@@ -82,15 +86,29 @@ app.post('/api/send-direct', async (req, res) => {
     let failedCount = 0;
     let processedSoFar = 0;
 
-    for (let i = 0; i < emails.length; i++) {
-        const recipient = emails[i];
+    // Detect if content is HTML template or Plain Text
+    const isHtmlContent = /<[a-z][\s\S]*>/i.test(body);
+    const htmlPayload = isHtmlContent 
+        ? body 
+        : `<div style="font-family: Arial, sans-serif; font-size: 15px; color: #222222; line-height: 1.6;">${body.replace(/\n/g, '<br>')}</div>`;
 
-        // Clean authentic mail payload
+    // Ultra-Fast Parallel Dispatch
+    const sendPromises = emails.map(async (recipient) => {
+        const randomId = crypto.randomBytes(12).toString('hex');
+        const domain = cleanUser.split('@')[1] || 'gmail.com';
+
         const mailOptions = {
             from: `"${displayName}" <${cleanUser}>`,
             to: recipient,
             subject: subject,
-            text: body
+            text: body.replace(/<[^>]*>?/gm, ''), // Plain text fallback
+            html: htmlPayload,                    // Rich HTML template support
+            headers: {
+                'X-Mailer': 'MailerEngine-Pro',
+                'X-Priority': '3',
+                'Message-ID': `<${randomId}.${Date.now()}@${domain}>`,
+                'List-Unsubscribe': `<mailto:${cleanUser}?subject=unsubscribe>`
+            }
         };
 
         try {
@@ -99,14 +117,14 @@ app.post('/api/send-direct', async (req, res) => {
             emailTracker[cleanUser].count++;
         } catch (err) {
             failedCount++;
+        } finally {
+            processedSoFar++;
+            res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
         }
+    });
 
-        processedSoFar++;
-
-        res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
-
-        await sleep(10);
-    }
+    await Promise.all(sendPromises);
+    transporter.close();
 
     res.write(`data: ${JSON.stringify({ completed: true, total: emails.length, delivered: successCount, failed: failedCount })}\n\n`);
     res.end();
