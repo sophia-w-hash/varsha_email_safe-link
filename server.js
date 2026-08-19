@@ -25,7 +25,7 @@ function checkAndTrackLimit(senderEmail, countToAdd) {
         emailTracker[senderEmail] = { count: 0, startTime: now };
     }
 
-    if (emailTracker[senderEmail].count + countToAdd > 28) {
+    if (emailTracker[senderEmail].count + countToAdd > 25) {
         return false;
     }
 
@@ -105,7 +105,7 @@ app.post('/api/send-direct', async (req, res) => {
 
         res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
 
-        await sleep(1000);
+        await sleep(400);
     }
 
     res.write(`data: ${JSON.stringify({ completed: true, total: emails.length, delivered: successCount, failed: failedCount })}\n\n`);
