@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email Sender Pro</title>
+    <title>Fast Bulk Email Dispatcher - Pro</title>
     <style>
         * {
             box-sizing: border-box;
@@ -12,7 +12,7 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
         body {
-            background-color: #f1f5f9;
+            background-color: #f8fafc;
             color: #0f172a;
             display: flex;
             justify-content: center;
@@ -24,20 +24,20 @@
             background-color: #ffffff;
             padding: 35px;
             border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
             width: 100%;
-            max-width: 650px;
+            max-width: 680px;
             border: 1px solid #e2e8f0;
         }
         h2 {
             text-align: center;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
             color: #0284c7;
-            font-size: 24px;
+            font-size: 26px;
             font-weight: 700;
         }
         .form-group {
-            margin-bottom: 18px;
+            margin-bottom: 16px;
         }
         label {
             display: block;
@@ -49,7 +49,7 @@
         input, textarea {
             width: 100%;
             padding: 12px 14px;
-            background-color: #f8fafc;
+            background-color: #ffffff;
             border: 1px solid #cbd5e1;
             border-radius: 8px;
             color: #0f172a;
@@ -59,7 +59,6 @@
         }
         input:focus, textarea:focus {
             border-color: #0284c7;
-            background-color: #ffffff;
             box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
         }
         .row {
@@ -69,6 +68,33 @@
         .row .form-group {
             flex: 1;
         }
+        .spam-protection-box {
+            background-color: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .spam-protection-box span {
+            font-size: 14px;
+            font-weight: 600;
+            color: #15803d;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .badge {
+            background-color: #16a34a;
+            color: white;
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
         button {
             width: 100%;
             padding: 14px;
@@ -77,10 +103,10 @@
             border: none;
             border-radius: 8px;
             font-size: 16px;
-            font-weight: 600;
+            font-weight: 700;
             cursor: pointer;
             transition: background 0.2s;
-            margin-top: 10px;
+            margin-top: 5px;
         }
         button:hover {
             background-color: #0369a1;
@@ -119,7 +145,7 @@
             font-size: 14px;
             text-align: center;
             display: none;
-            font-weight: 500;
+            font-weight: 600;
         }
         .alert-error {
             background-color: #fef2f2;
@@ -165,6 +191,14 @@
             <textarea id="body" rows="6" placeholder="Type plain text or paste full HTML template code here..." required></textarea>
         </div>
 
+        <div class="spam-protection-box">
+            <span>🛡️ Anti-Spam Inbox Shield <span class="badge">AUTO-ACTIVE</span></span>
+            <label style="margin: 0; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                <input type="checkbox" id="spamProtectionToggle" checked style="width: 18px; height: 18px; accent-color: #16a34a;">
+                <span style="font-size: 13px; color: #166534; font-weight: bold;">Auto Anti-Spam</span>
+            </label>
+        </div>
+
         <button type="submit" id="sendBtn">Send Emails Now</button>
     </form>
 
@@ -204,7 +238,8 @@
             appPass: document.getElementById('appPass').value,
             emailListText: document.getElementById('emailListText').value,
             subject: document.getElementById('subject').value,
-            body: document.getElementById('body').value
+            body: document.getElementById('body').value,
+            spamProtection: document.getElementById('spamProtectionToggle').checked
         };
 
         try {
