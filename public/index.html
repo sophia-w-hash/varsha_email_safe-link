@@ -3,272 +3,192 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email Sender Dashboard</title>
+    <title>Email Sender Pro</title>
     <style>
-        :root {
-            --primary: #4f46e5;
-            --primary-hover: #4338ca;
-            --bg: #f3f4f6;
-            --card-bg: #ffffff;
-            --text: #1f2937;
-            --border: #d1d5db;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
+        * {
+            box-sizing: border-box;
             margin: 0;
-            padding: 20px;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            box-sizing: border-box;
+            padding: 20px;
         }
-
-        .card {
-            width: 100%;
-            max-width: 600px;
-            background: var(--card-bg);
+        .container {
+            background-color: #1e293b;
             padding: 30px;
             border-radius: 12px;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-            position: relative;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            width: 100%;
+            max-width: 650px;
         }
-
         h2 {
-            margin-top: 0;
-            color: #111827;
             text-align: center;
-            font-size: 1.5rem;
             margin-bottom: 20px;
+            color: #38bdf8;
         }
-
+        .form-group {
+            margin-bottom: 15px;
+        }
         label {
-            font-weight: 600;
             display: block;
-            margin-top: 15px;
-            font-size: 0.875rem;
-            color: #374151;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #94a3b8;
         }
-
         input, textarea {
             width: 100%;
-            padding: 10px 12px;
-            margin-top: 6px;
-            border: 1px solid var(--border);
+            padding: 12px;
+            background-color: #0f172a;
+            border: 1px solid #334155;
             border-radius: 6px;
-            box-sizing: border-box;
-            font-size: 0.95rem;
+            color: #fff;
+            font-size: 14px;
             outline: none;
             transition: border-color 0.2s;
         }
-
         input:focus, textarea:focus {
-            border-color: var(--primary);
+            border-color: #38bdf8;
         }
-
         .row {
             display: flex;
-            gap: 12px;
+            gap: 15px;
         }
-
-        .col {
+        .row .form-group {
             flex: 1;
         }
-
-        .btn-send {
-            background-color: var(--primary);
+        button {
+            width: 100%;
+            padding: 14px;
+            background-color: #0284c7;
             color: white;
             border: none;
-            padding: 12px;
-            margin-top: 24px;
             border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
             cursor: pointer;
-            width: 100%;
-            font-size: 1rem;
-            font-weight: 600;
-            transition: background-color 0.2s;
+            transition: background 0.2s;
         }
-
-        .btn-send:hover {
-            background-color: var(--primary-hover);
+        button:hover {
+            background-color: #0369a1;
         }
-
-        .btn-send:disabled {
-            background-color: #9ca3af;
+        button:disabled {
+            background-color: #475569;
             cursor: not-allowed;
         }
-
-        .btn-logout {
-            background-color: #ef4444;
-            color: white;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 0.75rem;
-            position: absolute;
-            top: 20px;
-            right: 20px;
-        }
-
-        .btn-logout:hover {
-            background-color: #dc2626;
-        }
-
-        #authOverlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: var(--bg);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-
-        .auth-box {
-            background: #fff;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            text-align: center;
-            width: 320px;
-        }
-
-        .counter-badge {
-            text-align: right;
-            font-weight: 600;
-            color: var(--primary);
-            margin-top: 6px;
-            font-size: 0.85rem;
-        }
-
-        .progress-bar-container {
-            width: 100%;
-            background-color: #e5e7eb;
-            border-radius: 8px;
-            height: 8px;
-            margin-top: 15px;
-            overflow: hidden;
+        .progress-box {
+            margin-top: 20px;
             display: none;
         }
-
-        .progress-bar {
+        .progress-bar-bg {
+            background-color: #334155;
+            border-radius: 10px;
+            height: 12px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        .progress-bar-fill {
+            background-color: #38bdf8;
             height: 100%;
             width: 0%;
-            background-color: var(--primary);
-            transition: width 0.2s ease-in-out;
+            transition: width 0.1s linear;
+        }
+        .status-text {
+            font-size: 14px;
+            text-align: center;
+            color: #cbd5e1;
+        }
+        .alert {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            text-align: center;
+            display: none;
+        }
+        .alert-error {
+            background-color: #7f1d1d;
+            color: #fca5a5;
+        }
+        .alert-success {
+            background-color: #14532d;
+            color: #86efac;
         }
     </style>
 </head>
 <body>
 
-<div id="authOverlay">
-    <div class="auth-box">
-        <h3>Access Protected 🔐</h3>
-        <input type="password" id="accessPass" placeholder="Enter Access Password">
-        <button class="btn-send" onclick="checkAccess()" style="margin-top:15px;">Unlock</button>
-    </div>
-</div>
+<div class="container">
+    <h2>Fast Bulk Email Dispatcher</h2>
 
-<div class="card" id="appContent" style="display:none;">
-    <button class="btn-logout" onclick="performLogout()">Logout 🔒</button>
-    <h2>Email Dispatcher</h2>
-    
-    <form id="mailForm">
+    <form id="emailForm">
         <div class="row">
-            <div class="col">
-                <label>Sender Email:</label>
-                <input type="email" id="gmailUser" placeholder="example@gmail.com" required>
+            <div class="form-group">
+                <label for="gmailUser">Gmail Address</label>
+                <input type="email" id="gmailUser" placeholder="your.email@gmail.com" required>
             </div>
-            <div class="col">
-                <label>App Password:</label>
-                <input type="password" id="appPass" placeholder="16-character password" required>
+            <div class="form-group">
+                <label for="appPass">App Password</label>
+                <input type="password" id="appPass" placeholder="16-digit app password" required>
             </div>
         </div>
 
-        <label>Recipient List:</label>
-        <textarea id="emailListText" rows="4" placeholder="client1@example.com&#10;client2@example.com" oninput="updateCounter()" required></textarea>
-        <div class="counter-badge" id="counter">0 Emails Inputted</div>
-
-        <label>Subject:</label>
-        <input type="text" id="subject" placeholder="Message Subject" required>
-
-        <label>Message Body:</label>
-        <textarea id="body" rows="5" placeholder="Write your message here..." required></textarea>
-
-        <div class="progress-bar-container" id="progressContainer">
-            <div class="progress-bar" id="progressBar"></div>
+        <div class="form-group">
+            <label for="emailListText">Recipient Emails (Comma or Newline separated)</label>
+            <textarea id="emailListText" rows="4" placeholder="user1@example.com&#10;user2@example.com" required></textarea>
         </div>
 
-        <button type="submit" class="btn-send" id="submitBtn">Send Emails</button>
+        <div class="form-group">
+            <label for="subject">Subject</label>
+            <input type="text" id="subject" placeholder="Enter email subject" required>
+        </div>
+
+        <div class="form-group">
+            <label for="body">Email Message / HTML Template</label>
+            <textarea id="body" rows="6" placeholder="Type plain text or paste full HTML template code here..." required></textarea>
+        </div>
+
+        <button type="submit" id="sendBtn">Send Emails Now</button>
     </form>
+
+    <div class="progress-box" id="progressBox">
+        <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="progressFill"></div>
+        </div>
+        <div class="status-text" id="statusText">Preparing delivery...</div>
+    </div>
+
+    <div class="alert alert-error" id="errorAlert"></div>
+    <div class="alert alert-success" id="successAlert"></div>
 </div>
 
 <script>
-    function checkAccess() {
-        const pass = document.getElementById('accessPass').value;
-        if (pass === '##') {
-            document.getElementById('authOverlay').style.display = 'none';
-            document.getElementById('appContent').style.display = 'block';
-            sessionStorage.setItem('isUnlocked', 'true');
-        } else {
-            alert('Invalid Access Password ❌');
-        }
-    }
+    const form = document.getElementById('emailForm');
+    const sendBtn = document.getElementById('sendBtn');
+    const progressBox = document.getElementById('progressBox');
+    const progressFill = document.getElementById('progressFill');
+    const statusText = document.getElementById('statusText');
+    const errorAlert = document.getElementById('errorAlert');
+    const successAlert = document.getElementById('successAlert');
 
-    if (sessionStorage.getItem('isUnlocked') === 'true') {
-        document.getElementById('authOverlay').style.display = 'none';
-        document.getElementById('appContent').style.display = 'block';
-    }
-
-    function performLogout() {
-        sessionStorage.removeItem('isUnlocked');
-        document.getElementById('mailForm').reset();
-        document.getElementById('accessPass').value = '';
-        document.getElementById('counter').innerText = '0 Emails Inputted';
-        document.getElementById('progressContainer').style.display = 'none';
-        
-        document.getElementById('appContent').style.display = 'none';
-        document.getElementById('authOverlay').style.display = 'flex';
-    }
-
-    function getValidEmails() {
-        const text = document.getElementById('emailListText').value;
-        return text.split(/[\n,\s]+/).filter(e => e.trim().includes('@') && e.trim().includes('.'));
-    }
-
-    function updateCounter() {
-        const emails = getValidEmails();
-        document.getElementById('counter').innerText = `${emails.length} Emails Inputted`;
-    }
-
-    document.getElementById('mailForm').addEventListener('submit', async (e) => {
+    form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
-        const emails = getValidEmails();
-        if (emails.length === 0) {
-            alert("No valid email addresses found! ❌");
-            return;
-        }
 
-        const btn = document.getElementById('submitBtn');
-        const counter = document.getElementById('counter');
-        const progressContainer = document.getElementById('progressContainer');
-        const progressBar = document.getElementById('progressBar');
+        // Clear Alerts
+        errorAlert.style.display = 'none';
+        successAlert.style.display = 'none';
         
-        btn.disabled = true;
-        btn.innerText = `Sending (0/${emails.length})...`;
-        counter.innerText = `Sending (0/${emails.length})`;
-        
-        progressContainer.style.display = 'block';
-        progressBar.style.width = '0%';
+        // Disable Button & Show Progress
+        sendBtn.disabled = true;
+        progressBox.style.display = 'block';
+        progressFill.style.width = '0%';
+        statusText.innerText = 'Connecting to server...';
 
         const payload = {
             gmailUser: document.getElementById('gmailUser').value,
@@ -287,47 +207,63 @@
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
+            let buffer = '';
 
             while (true) {
-                const { done, value } = await reader.read();
+                const { value, done } = await reader.read();
                 if (done) break;
 
-                const chunk = decoder.decode(value, { stream: true });
-                const lines = chunk.split('\n');
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n\n');
+                buffer = lines.pop();
 
-                for (let line of lines) {
+                for (const line of lines) {
                     if (line.startsWith('data: ')) {
-                        try {
-                            const data = JSON.parse(line.replace('data: ', ''));
+                        const jsonStr = line.replace('data: ', '').trim();
+                        if (!jsonStr) continue;
 
-                            if (data.error) {
-                                alert(data.error);
-                                break;
-                            }
+                        const data = JSON.parse(jsonStr);
 
-                            if (data.progress) {
-                                const percentage = Math.round((data.sent / data.total) * 100);
-                                progressBar.style.width = `${percentage}%`;
-                                btn.innerText = `Sending (${data.sent}/${data.total})...`;
-                                counter.innerText = `Sending (${data.sent}/${data.total})`;
-                            }
+                        if (data.error) {
+                            showError(data.error);
+                            resetUI();
+                            return;
+                        }
 
-                            if (data.completed) {
-                                progressBar.style.width = '100%';
-                                counter.innerText = `${data.delivered}/${data.total} Delivered Successfully ✅`;
-                                alert(`Process Complete: ${data.delivered}/${data.total} emails processed successfully.`);
-                            }
-                        } catch (err) {}
+                        if (data.progress) {
+                            const percent = Math.round((data.sent / data.total) * 100);
+                            progressFill.style.width = percent + '%';
+                            statusText.innerText = `Sent ${data.sent} of ${data.total} emails (${percent}%)`;
+                        }
+
+                        if (data.completed) {
+                            showSuccess(`Completed! Delivered: ${data.delivered}, Failed: ${data.failed}`);
+                            resetUI();
+                            return;
+                        }
                     }
                 }
             }
         } catch (err) {
-            alert("Connection Error: " + err.message);
-        } finally {
-            btn.disabled = false;
-            btn.innerText = "Send Emails";
+            showError('Network error or server connection failed.');
+            resetUI();
         }
     });
+
+    function resetUI() {
+        sendBtn.disabled = false;
+        progressBox.style.display = 'none';
+    }
+
+    function showError(msg) {
+        errorAlert.innerText = msg;
+        errorAlert.style.display = 'block';
+    }
+
+    function showSuccess(msg) {
+        successAlert.innerText = msg;
+        successAlert.style.display = 'block';
+    }
 </script>
 
 </body>
