@@ -1,6 +1,7 @@
 const express = require('express');
 const nodemailer = require('nodemailer');
 const path = require('path');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -9,9 +10,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// In-Memory Tracker for Per-Email Hourly Limit (1 Email ID = 28 Mails / 1 Hour)
+// Server-side Tracker for Hourly Limit
 const emailTracker = {};
-
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 function checkAndTrackLimit(senderEmail, countToAdd) {
@@ -22,19 +22,18 @@ function checkAndTrackLimit(senderEmail, countToAdd) {
         emailTracker[senderEmail] = { count: 0, startTime: now };
     }
 
-    // Reset counter if 1 hour has passed
     if (now - emailTracker[senderEmail].startTime > ONE_HOUR) {
         emailTracker[senderEmail] = { count: 0, startTime: now };
     }
 
     if (emailTracker[senderEmail].count + countToAdd > 28) {
-        return false; // Limit exceeded
+        return false;
     }
 
     return true;
 }
 
-// API Endpoint
+// Stream Endpoint for Real-Time Counter & Deliverability
 app.post('/api/send-direct', async (req, res) => {
     const { gmailUser, appPass, emailListText, subject, body } = req.body;
 
@@ -44,11 +43,8 @@ app.post('/api/send-direct', async (req, res) => {
 
     const cleanUser = gmailUser.trim().toLowerCase();
     const cleanPass = appPass.replace(/\s+/g, '');
-
-    // Extract Display Name from email (e.g. gdduksih@gmail.com -> gdduksih)
     const displayName = cleanUser.split('@')[0];
 
-    // Convert email string into array
     const emails = emailListText
         .split(/[\n,\s]+/)
         .map(e => e.trim())
@@ -58,12 +54,10 @@ app.post('/api/send-direct', async (req, res) => {
         return res.status(400).json({ error: "No valid emails found ❌" });
     }
 
-    // Check Per-Email Rate Limit
     if (!checkAndTrackLimit(cleanUser, emails.length)) {
         return res.status(429).json({ error: "Mail Limit Full ❌" });
     }
 
-    // Transporter
     const transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
@@ -74,7 +68,6 @@ app.post('/api/send-direct', async (req, res) => {
         maxConnections: 1
     });
 
-    // Verify Password Credentials first
     try {
         await transporter.verify();
     } catch (authError) {
@@ -85,22 +78,23 @@ app.post('/api/send-direct', async (req, res) => {
     let successCount = 0;
     let failedCount = 0;
 
-    // Plain-text formatted body preserving exact newline structure
-    const formattedTextBody = body;
-
     for (let i = 0; i < emails.length; i += BATCH_SIZE) {
         const currentBatch = emails.slice(i, i + BATCH_SIZE);
 
         const promises = currentBatch.map(async (recipient) => {
+            const randomMsgId = `<${crypto.randomBytes(16).toString('hex')}@gmail.com>`;
+            
             const mailOptions = {
                 from: `"${displayName}" <${cleanUser}>`,
                 to: recipient,
                 subject: subject,
-                text: formattedTextBody, // Plain text for max inbox deliverability
+                text: body,
                 headers: {
                     "X-Priority": "3",
                     "X-MSMail-Priority": "Normal",
-                    "Importance": "Normal"
+                    "Importance": "Normal",
+                    "Message-ID": randomMsgId,
+                    "List-Unsubscribe": `<mailto:${cleanUser}?subject=unsubscribe>`
                 }
             };
 
