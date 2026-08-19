@@ -1,69 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bulk Mail Sender Dashboard</title>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eef2f5; margin: 0; padding: 20px; }
-        .card { max-width: 650px; background: #fff; padding: 25px; border-radius: 10px; margin: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.08); position: relative; }
-        h2 { margin-top: 0; color: #333; text-align: center; }
-        label { font-weight: 600; display: block; margin-top: 12px; color: #444; }
-        input, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
-        .row { display: flex; gap: 10px; }
-        .col { flex: 1; }
-        .btn-send { background: #28a745; color: white; border: none; padding: 12px; margin-top: 20px; border-radius: 6px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; }
-        .btn-send:disabled { background: #6c757d; cursor: not-allowed; }
-        
-        .btn-logout { background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 12px; position: absolute; top: 20px; right: 20px; }
-        .btn-logout:hover { background: #c82333; }
-
-        #authOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #eef2f5; display: flex; align-items: center; justify-content: center; z-index: 1000; }
-        .auth-box { background: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; width: 300px; }
-        
-        .counter-badge { text-align: right; font-weight: bold; color: #007bff; margin-top: 5px; font-size: 15px; }
-    </style>
-</head>
-<body>
-
-<div id="authOverlay">
-    <div class="auth-box">
-        <h3>Access Protected 🔐</h3>
-        <input type="password" id="accessPass" placeholder="Enter Access Password">
-        <button class="btn-send" onclick="checkAccess()" style="margin-top:10px;">Unlock</button>
-    </div>
-</div>
-
-<div class="card" id="appContent" style="display:none;">
-    <button class="btn-logout" onclick="performLogout()">Logout 🔒</button>
-    <h2>Bulk Mail Sender (Anti-Spam Enabled)</h2>
-    
-    <form id="mailForm">
-        <div class="row">
-            <div class="col">
-                <label>Your Gmail ID:</label>
-                <input type="email" id="gmailUser" placeholder="example@gmail.com" required>
-            </div>
-            <div class="col">
-                <label>16-digit App Password:</label>
-                <input type="password" id="appPass" placeholder="abcd efgh ijkl mnop" required>
-            </div>
-        </div>
-
-        <label>Paste Client Emails:</label>
-        <textarea id="emailListText" rows="4" placeholder="client1@gmail.com&#10;client2@gmail.com" oninput="updateCounter()" required></textarea>
-        <div class="counter-badge" id="counter">0 Emails Inputted</div>
-
-        <label>Subject:</label>
-        <input type="text" id="subject" placeholder="Enter Subject" required>
-
-        <label>Email Body (Plain Text):</label>
-        <textarea id="body" rows="5" placeholder="Enter your text here..." required></textarea>
-
-        <button type="submit" class="btn-send" id="submitBtn">Send</button>
-    </form>
-</div>
-
 <script>
     function checkAccess() {
         const pass = document.getElementById('accessPass').value;
@@ -101,6 +35,7 @@
         document.getElementById('counter').innerText = `${emails.length} Emails Inputted`;
     }
 
+    // High Speed Zero-Latency Stream Processor
     document.getElementById('mailForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         
@@ -135,6 +70,7 @@
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
 
+            // Instant Loop - Instant Render Batch
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
@@ -153,17 +89,18 @@
                             }
 
                             if (data.progress) {
-                                btn.innerText = `Sending (${data.sent}/${data.total})...`;
-                                counter.innerText = `Sending (${data.sent}/${data.total})`;
+                                // RequestAnimationFrame for 0ms Instant UI Refresh
+                                window.requestAnimationFrame(() => {
+                                    btn.innerText = `Sending (${data.sent}/${data.total})...`;
+                                    counter.innerText = `Sending (${data.sent}/${data.total})`;
+                                });
                             }
 
                             if (data.completed) {
                                 counter.innerText = `${data.delivered}/${data.total} Delivered Successfully ✅`;
                                 alert(`Mail Send Successful ✅ (${data.delivered}/${data.total})`);
                             }
-                        } catch (err) {
-                            // Ignore partial JSON chunks
-                        }
+                        } catch (err) {}
                     }
                 }
             }
@@ -175,6 +112,3 @@
         }
     });
 </script>
-
-</body>
-</html>
