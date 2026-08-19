@@ -10,16 +10,50 @@ app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+const emailTracker = {};
+
+// Sleep helper for human-like rate spacing
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Generate unique plain-text version from HTML
-function convertToPlainText(html) {
-    if (!html) return '';
-    return html
-        .replace(/<br\s*[\/]?>/gi, '\n')
-        .replace(/<\/p>/gi, '\n\n')
-        .replace(/<[^>]*>/g, '')
-        .trim();
+// Mandatory Zero-Width Fingerprinting to defeat duplicate spam detection
+function applyMandatoryAntiSpamFingerprint(content) {
+    const zeroWidthChars = ['\u200B', '\u200C', '\u200D', '\uFEFF'];
+    let fingerprint = '';
+    for (let i = 0; i < 12; i++) {
+        fingerprint += zeroWidthChars[Math.floor(Math.random() * zeroWidthChars.length)];
+    }
+    
+    if (/<[a-z][\s\S]*>/i.test(content)) {
+        return content + `<span style="display:none !important; font-size:0px; line-height:0px; opacity:0; color:transparent;">${fingerprint}</span>`;
+    }
+    return content + fingerprint;
+}
+
+// Auto-sanitize content to neutralize common spam trigger terms
+function autoSanitizeText(text) {
+    if (!text) return '';
+    return text.replace(/\b(100% free|make money|click here now|guaranteed|cash bonus|unbelievable|buy now|urgent action)\b/gi, (match) => {
+        return match.split('').join('\u200B');
+    });
+}
+
+function checkAndTrackLimit(senderEmail, countToAdd) {
+    const now = Date.now();
+    const ONE_HOUR = 3600000;
+
+    if (!emailTracker[senderEmail]) {
+        emailTracker[senderEmail] = { count: 0, startTime: now };
+    }
+
+    if (now - emailTracker[senderEmail].startTime > ONE_HOUR) {
+        emailTracker[senderEmail] = { count: 0, startTime: now };
+    }
+
+    if (emailTracker[senderEmail].count + countToAdd > 450) {
+        return false;
+    }
+
+    return true;
 }
 
 app.post('/api/send-direct', async (req, res) => {
@@ -29,6 +63,7 @@ app.post('/api/send-direct', async (req, res) => {
 
     const { gmailUser, appPass, emailListText, subject, body } = req.body;
 
+    // Auto-Verification Step 1: Input Validation
     if (!gmailUser || !appPass) {
         res.write(`data: ${JSON.stringify({ error: "Gmail Address ya App Password missing hai! ❌" })}\n\n`);
         return res.end();
@@ -49,25 +84,33 @@ app.post('/api/send-direct', async (req, res) => {
         return res.end();
     }
 
-    // High Trust Pool Connection
+    if (!checkAndTrackLimit(cleanUser, emails.length)) {
+        res.write(`data: ${JSON.stringify({ error: "Hourly Limit Exceeded (Max 450/hr allowed) ❌" })}\n\n`);
+        return res.end();
+    }
+
+    // Auto-Verification Step 2: Establish Secure Connection
     const transporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',
-        port: 587,
-        secure: false, // TLS Start
-        requireTLS: true,
+        port: 465,
+        secure: true,
+        pool: true,
+        maxConnections: 1,
+        maxMessages: 100,
         auth: {
             user: cleanUser,
             pass: cleanPass
         },
         tls: {
-            ciphers: 'SSLv3'
+            rejectUnauthorized: false
         }
     });
 
+    // Auto-Verification Step 3: SMTP Handshake Test
     try {
         await transporter.verify();
     } catch (authError) {
-        res.write(`data: ${JSON.stringify({ error: "SMTP Authentication Failed! App Password check karein. ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Auto-Verification Failed: App Password galat hai ya SMTP connect nahi ho pa raha! ❌" })}\n\n`);
         return res.end();
     }
 
@@ -75,55 +118,56 @@ app.post('/api/send-direct', async (req, res) => {
     let failedCount = 0;
     let processedSoFar = 0;
 
-    const isHtml = /<[a-z][\s\S]*>/i.test(body);
+    const isHtmlContent = /<[a-z][\s\S]*>/i.test(body);
+
+    // Mandatory Anti-Spam Processing
+    const sanitizedSubject = autoSanitizeText(subject);
+    const sanitizedBody = autoSanitizeText(body);
 
     for (let i = 0; i < emails.length; i++) {
         const recipient = emails[i];
-        const recipientDomain = recipient.split('@')[1] || 'client.com';
-        const uniqueToken = crypto.randomBytes(8).toString('hex');
+        const uniqueMessageId = `${crypto.randomBytes(8).toString('hex')}.${Date.now()}@${senderDomain}`;
         
-        // Zero-Width space injection to avoid hash-matching spam filters across external recipients
-        const zeroWidthSpace = '\u200B';
-        const randomizedBody = body + zeroWidthSpace.repeat(Math.floor(Math.random() * 5) + 1);
+        // Mandatory Anti-Spam Fingerprint Injection per recipient
+        const fingerprintedBody = applyMandatoryAntiSpamFingerprint(sanitizedBody);
 
-        const htmlContent = isHtml 
-            ? randomizedBody 
-            : `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 15px; color: #1f2937; line-height: 1.6;">${randomizedBody.replace(/\n/g, '<br>')}</div>`;
+        const htmlPayload = isHtmlContent 
+            ? fingerprintedBody 
+            : `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; color: #1f2937; line-height: 1.6;">${fingerprintedBody.replace(/\n/g, '<br>')}</div>`;
 
-        const plainTextContent = convertToPlainText(randomizedBody);
+        const plainText = fingerprintedBody.replace(/<[^>]*>?/gm, '').trim();
 
+        // Optimized Mail Options (NO Unsubscribe Headers)
         const mailOptions = {
             from: `"${senderName}" <${cleanUser}>`,
             to: recipient,
-            subject: subject,
-            text: plainTextContent,
-            html: htmlContent,
+            subject: sanitizedSubject,
+            text: plainText,
+            html: htmlPayload,
             headers: {
-                // High deliverability headers for external clients
-                'Message-ID': `<${uniqueToken}-${Date.now()}@${senderDomain}>`,
-                'X-Mailer': 'Outlook-Express/7.0 (MSN 10.0)',
+                'Message-ID': `<${uniqueMessageId}>`,
+                'X-Mailer': 'Apple Mail (2.3654.120.8)',
                 'X-Priority': '3',
                 'X-MSMail-Priority': 'Normal',
-                'List-Unsubscribe': `<mailto:${cleanUser}?subject=Unsubscribe-${uniqueToken}>`,
-                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-                'X-Complaints-To': `mailto:abuse@${senderDomain}`
+                'X-Entity-Ref-ID': `${crypto.randomBytes(6).toString('hex')}`
             }
         };
 
         try {
             await transporter.sendMail(mailOptions);
             successCount++;
+            emailTracker[cleanUser].count++;
         } catch (err) {
-            console.error(`Failed delivery to ${recipient}:`, err.message);
+            console.error(`Failed sending to ${recipient}:`, err.message);
             failedCount++;
         } finally {
             processedSoFar++;
             res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
         }
 
-        // Delay algorithm: 500ms - 1000ms delay per client email
+        // Random jitter delay (400ms - 800ms) to ensure primary inbox routing
         if (i < emails.length - 1) {
-            const delay = Math.floor(Math.random() * 500) + 500;
+            const delay = Math.floor(Math.random() * 400) + 400;
             await sleep(delay);
         }
     }
