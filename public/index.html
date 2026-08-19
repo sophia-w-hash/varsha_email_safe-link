@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bulk Mail Sender Dashboard</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eef2f5; margin: 0; padding: 20px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eef2f5; margin: 0; padding: 20px; user-select: none; }
         .card { max-width: 650px; background: #fff; padding: 25px; border-radius: 10px; margin: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.08); position: relative; }
         h2 { margin-top: 0; color: #333; text-align: center; }
         label { font-weight: 600; display: block; margin-top: 12px; color: #444; }
@@ -20,10 +20,10 @@
         .auth-box { background: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; width: 300px; }
         
         .counter-badge { text-align: right; font-weight: bold; color: #007bff; margin-top: 5px; font-size: 14px; }
-        .logout-hint { font-size: 11px; color: #888; text-align: center; margin-top: 15px; cursor: pointer; user-select: none; }
+        .logout-hint { font-size: 11px; color: #888; text-align: center; margin-top: 15px; }
     </style>
 </head>
-<body dblclick="handleDoubleClick()">
+<body ondblclick="performAutoLogout()">
 
 <!-- Password Access Screen -->
 <div id="authOverlay">
@@ -52,7 +52,7 @@
 
         <label>Paste Client Emails:</label>
         <textarea id="emailListText" rows="4" placeholder="client1@gmail.com&#10;client2@gmail.com" oninput="updateCounter()" required></textarea>
-        <div class="counter-badge" id="counter">0 Emails</div>
+        <div class="counter-badge" id="counter">0/28 Emails</div>
 
         <label>Subject:</label>
         <input type="text" id="subject" placeholder="Enter Subject" required>
@@ -62,11 +62,10 @@
 
         <button type="submit" id="submitBtn">Send</button>
     </form>
-    <div class="logout-hint">(Double click anywhere on screen to Logout)</div>
+    <div class="logout-hint">(Double click anywhere on screen to Logout & Reset)</div>
 </div>
 
 <script>
-    // Security Access Setup
     function checkAccess() {
         const pass = document.getElementById('accessPass').value;
         if (pass === '##') {
@@ -83,20 +82,29 @@
         document.getElementById('appContent').style.display = 'block';
     }
 
-    // Double Click Auto Logout
-    function handleDoubleClick() {
+    // Double Click Instant Logout & Complete Reset
+    function performAutoLogout() {
+        // Clear stored session
         sessionStorage.removeItem('isUnlocked');
-        location.reload();
+        
+        // Reset form inputs
+        document.getElementById('mailForm').reset();
+        document.getElementById('accessPass').value = '';
+        document.getElementById('counter').innerText = '0/28 Emails';
+        
+        // Toggle view to lock screen
+        document.getElementById('appContent').style.display = 'none';
+        document.getElementById('authOverlay').style.display = 'flex';
     }
 
-    // Live Email Counter (e.g. 20/28)
+    // Live Counter
     function updateCounter() {
         const text = document.getElementById('emailListText').value;
         const emails = text.split(/[\n,\s]+/).filter(e => e.trim().includes('@') && e.trim().includes('.'));
         document.getElementById('counter').innerText = `${emails.length}/28 Emails`;
     }
 
-    // Submit Handler
+    // Send Form
     document.getElementById('mailForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         
