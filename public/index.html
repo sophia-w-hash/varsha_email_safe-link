@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulk Mail Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f6f8; margin: 0; padding: 20px; }
+        .container { max-width: 650px; background: #fff; padding: 25px; border-radius: 8px; margin: auto; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h2 { color: #333; margin-top: 0; }
+        label { font-weight: bold; display: block; margin-top: 15px; }
+        input[type="text"], textarea, input[type="file"] { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { background: #007bff; color: white; border: none; padding: 12px 20px; margin-top: 20px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; }
+        button:hover { background: #0056b3; }
+        #status { margin-top: 15px; padding: 10px; border-radius: 4px; display: none; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Bulk Mail Sender (Batch Size: 6)</h2>
+    
+    <form id="mailForm" enctype="multipart/form-data">
+        <label>Upload CSV File (Column header: 'email'):</label>
+        <input type="file" id="csvFile" accept=".csv" required>
+
+        <label>Email Subject:</label>
+        <input type="text" id="subject" placeholder="Enter subject line" required>
+
+        <label>HTML / Text Email Body:</label>
+        <textarea id="body" rows="6" placeholder="<h1>Hello</h1><p>Your message here...</p>" required></textarea>
+
+        <button type="submit" id="submitBtn">Start Sending Emails</button>
+    </form>
+
+    <div id="status"></div>
+</div>
+
+<script>
+    document.getElementById('mailForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const btn = document.getElementById('submitBtn');
+        const status = document.getElementById('status');
+        const fileInput = document.getElementById('csvFile');
+        const subject = document.getElementById('subject').value;
+        const body = document.getElementById('body').value;
+
+        btn.disabled = true;
+        btn.innerText = "Processing Batches...";
+        status.style.display = "block";
+        status.className = "success";
+        status.innerText = "Emails process ho rahe hain, har batch me 6 mails jayengi...";
+
+        const formData = new FormData();
+        formData.append('csvFile', fileInput.files[0]);
+        formData.append('subject', subject);
+        formData.append('body', body);
+
+        try {
+            const res = await fetch('/api/send-csv', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                status.className = "success";
+                status.innerText = `Process Complete! Total Mails: ${data.totalFound}, Delivered: ${data.details.successCount}, Failed: ${data.details.failedCount}`;
+            } else {
+                throw new Error(data.error || "Failed to send");
+            }
+        } catch (err) {
+            status.className = "error";
+            status.innerText = "Error: " + err.message;
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "Start Sending Emails";
+        }
+    });
+</script>
+
+</body>
+</html>
