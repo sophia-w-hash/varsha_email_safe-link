@@ -3,25 +3,168 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bulk Mail Sender Dashboard</title>
+    <title>Email Sender Dashboard</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eef2f5; margin: 0; padding: 20px; }
-        .card { max-width: 650px; background: #fff; padding: 25px; border-radius: 10px; margin: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.08); position: relative; }
-        h2 { margin-top: 0; color: #333; text-align: center; }
-        label { font-weight: 600; display: block; margin-top: 12px; color: #444; }
-        input, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
-        .row { display: flex; gap: 10px; }
-        .col { flex: 1; }
-        .btn-send { background: #28a745; color: white; border: none; padding: 12px; margin-top: 20px; border-radius: 6px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; }
-        .btn-send:disabled { background: #6c757d; cursor: not-allowed; }
-        
-        .btn-logout { background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 12px; position: absolute; top: 20px; right: 20px; }
-        .btn-logout:hover { background: #c82333; }
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg: #f3f4f6;
+            --card-bg: #ffffff;
+            --text: #1f2937;
+            --border: #d1d5db;
+        }
 
-        #authOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #eef2f5; display: flex; align-items: center; justify-content: center; z-index: 1000; }
-        .auth-box { background: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; width: 300px; }
-        
-        .counter-badge { text-align: right; font-weight: bold; color: #007bff; margin-top: 5px; font-size: 15px; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 600px;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #111827;
+            text-align: center;
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+        }
+
+        label {
+            font-weight: 600;
+            display: block;
+            margin-top: 15px;
+            font-size: 0.875rem;
+            color: #374151;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            margin-top: 6px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 0.95rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, textarea:focus {
+            border-color: var(--primary);
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+        }
+
+        .col {
+            flex: 1;
+        }
+
+        .btn-send {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px;
+            margin-top: 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+
+        .btn-send:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .btn-send:disabled {
+            background-color: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .btn-logout {
+            background-color: #ef4444;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.75rem;
+            position: absolute;
+            top: 20px;
+            right: 20px;
+        }
+
+        .btn-logout:hover {
+            background-color: #dc2626;
+        }
+
+        #authOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .auth-box {
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            text-align: center;
+            width: 320px;
+        }
+
+        .counter-badge {
+            text-align: right;
+            font-weight: 600;
+            color: var(--primary);
+            margin-top: 6px;
+            font-size: 0.85rem;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            background-color: #e5e7eb;
+            border-radius: 8px;
+            height: 8px;
+            margin-top: 15px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background-color: var(--primary);
+            transition: width 0.2s ease-in-out;
+        }
     </style>
 </head>
 <body>
@@ -30,37 +173,41 @@
     <div class="auth-box">
         <h3>Access Protected 🔐</h3>
         <input type="password" id="accessPass" placeholder="Enter Access Password">
-        <button class="btn-send" onclick="checkAccess()" style="margin-top:10px;">Unlock</button>
+        <button class="btn-send" onclick="checkAccess()" style="margin-top:15px;">Unlock</button>
     </div>
 </div>
 
 <div class="card" id="appContent" style="display:none;">
     <button class="btn-logout" onclick="performLogout()">Logout 🔒</button>
-    <h2>Bulk Mail Sender</h2>
+    <h2>Email Dispatcher</h2>
     
     <form id="mailForm">
         <div class="row">
             <div class="col">
-                <label>Your Gmail ID:</label>
+                <label>Sender Email:</label>
                 <input type="email" id="gmailUser" placeholder="example@gmail.com" required>
             </div>
             <div class="col">
-                <label>16-digit App Password:</label>
-                <input type="password" id="appPass" placeholder="abcd efgh ijkl mnop" required>
+                <label>App Password:</label>
+                <input type="password" id="appPass" placeholder="16-character password" required>
             </div>
         </div>
 
-        <label>Paste Client Emails:</label>
-        <textarea id="emailListText" rows="4" placeholder="client1@gmail.com&#10;client2@gmail.com" oninput="updateCounter()" required></textarea>
+        <label>Recipient List:</label>
+        <textarea id="emailListText" rows="4" placeholder="client1@example.com&#10;client2@example.com" oninput="updateCounter()" required></textarea>
         <div class="counter-badge" id="counter">0 Emails Inputted</div>
 
         <label>Subject:</label>
-        <input type="text" id="subject" placeholder="Enter Subject" required>
+        <input type="text" id="subject" placeholder="Message Subject" required>
 
-        <label>Email Body (Plain Text):</label>
-        <textarea id="body" rows="5" placeholder="Enter your text here..." required></textarea>
+        <label>Message Body:</label>
+        <textarea id="body" rows="5" placeholder="Write your message here..." required></textarea>
 
-        <button type="submit" class="btn-send" id="submitBtn">Send</button>
+        <div class="progress-bar-container" id="progressContainer">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+
+        <button type="submit" class="btn-send" id="submitBtn">Send Emails</button>
     </form>
 </div>
 
@@ -72,7 +219,7 @@
             document.getElementById('appContent').style.display = 'block';
             sessionStorage.setItem('isUnlocked', 'true');
         } else {
-            alert('Wrong Access Password ❌');
+            alert('Invalid Access Password ❌');
         }
     }
 
@@ -86,6 +233,7 @@
         document.getElementById('mailForm').reset();
         document.getElementById('accessPass').value = '';
         document.getElementById('counter').innerText = '0 Emails Inputted';
+        document.getElementById('progressContainer').style.display = 'none';
         
         document.getElementById('appContent').style.display = 'none';
         document.getElementById('authOverlay').style.display = 'flex';
@@ -112,10 +260,15 @@
 
         const btn = document.getElementById('submitBtn');
         const counter = document.getElementById('counter');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
         
         btn.disabled = true;
         btn.innerText = `Sending (0/${emails.length})...`;
         counter.innerText = `Sending (0/${emails.length})`;
+        
+        progressContainer.style.display = 'block';
+        progressBar.style.width = '0%';
 
         const payload = {
             gmailUser: document.getElementById('gmailUser').value,
@@ -153,25 +306,26 @@
                             }
 
                             if (data.progress) {
-                                setTimeout(() => {
-                                    btn.innerText = `Sending (${data.sent}/${data.total})...`;
-                                    counter.innerText = `Sending (${data.sent}/${data.total})`;
-                                }, 150);
+                                const percentage = Math.round((data.sent / data.total) * 100);
+                                progressBar.style.width = `${percentage}%`;
+                                btn.innerText = `Sending (${data.sent}/${data.total})...`;
+                                counter.innerText = `Sending (${data.sent}/${data.total})`;
                             }
 
                             if (data.completed) {
+                                progressBar.style.width = '100%';
                                 counter.innerText = `${data.delivered}/${data.total} Delivered Successfully ✅`;
-                                alert(`Mail Send Successful ✅ (${data.delivered}/${data.total})`);
+                                alert(`Process Complete: ${data.delivered}/${data.total} emails processed successfully.`);
                             }
                         } catch (err) {}
                     }
                 }
             }
         } catch (err) {
-            alert("Error: " + err.message);
+            alert("Connection Error: " + err.message);
         } finally {
             btn.disabled = false;
-            btn.innerText = "Send";
+            btn.innerText = "Send Emails";
         }
     });
 </script>
