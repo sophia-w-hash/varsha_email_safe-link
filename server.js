@@ -11,7 +11,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const emailTracker = {};
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 function checkAndTrackLimit(senderEmail, countToAdd) {
     const now = Date.now();
@@ -65,6 +64,8 @@ app.post('/api/send-direct', async (req, res) => {
 
     const transporter = nodemailer.createTransport({
         service: 'gmail',
+        pool: true, // Speed optimization using pool
+        maxConnections: 5,
         auth: {
             user: cleanUser,
             pass: cleanPass
@@ -82,10 +83,8 @@ app.post('/api/send-direct', async (req, res) => {
     let failedCount = 0;
     let processedSoFar = 0;
 
-    for (let i = 0; i < emails.length; i++) {
-        const recipient = emails[i];
-
-        // Clean authentic mail payload
+    // Parallel Dispatch Strategy for Ultra-Fast Speed
+    const sendPromises = emails.map(async (recipient) => {
         const mailOptions = {
             from: `"${displayName}" <${cleanUser}>`,
             to: recipient,
@@ -99,14 +98,13 @@ app.post('/api/send-direct', async (req, res) => {
             emailTracker[cleanUser].count++;
         } catch (err) {
             failedCount++;
+        } finally {
+            processedSoFar++;
+            res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
         }
+    });
 
-        processedSoFar++;
-
-        res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
-
-        await sleep(10);
-    }
+    await Promise.all(sendPromises);
 
     res.write(`data: ${JSON.stringify({ completed: true, total: emails.length, delivered: successCount, failed: failedCount })}\n\n`);
     res.end();
