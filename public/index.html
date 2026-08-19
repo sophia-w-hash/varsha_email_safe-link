@@ -9,11 +9,11 @@
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
         body {
-            background-color: #0f172a;
-            color: #f8fafc;
+            background-color: #f1f5f9;
+            color: #0f172a;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -21,40 +21,46 @@
             padding: 20px;
         }
         .container {
-            background-color: #1e293b;
-            padding: 30px;
+            background-color: #ffffff;
+            padding: 35px;
             border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
             width: 100%;
             max-width: 650px;
+            border: 1px solid #e2e8f0;
         }
         h2 {
             text-align: center;
-            margin-bottom: 20px;
-            color: #38bdf8;
+            margin-bottom: 25px;
+            color: #0284c7;
+            font-size: 24px;
+            font-weight: 700;
         }
         .form-group {
-            margin-bottom: 15px;
+            margin-bottom: 18px;
         }
         label {
             display: block;
-            margin-bottom: 5px;
+            margin-bottom: 6px;
             font-size: 14px;
-            color: #94a3b8;
+            font-weight: 600;
+            color: #334155;
         }
         input, textarea {
             width: 100%;
-            padding: 12px;
-            background-color: #0f172a;
-            border: 1px solid #334155;
-            border-radius: 6px;
-            color: #fff;
+            padding: 12px 14px;
+            background-color: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            color: #0f172a;
             font-size: 14px;
             outline: none;
-            transition: border-color 0.2s;
+            transition: all 0.2s ease;
         }
         input:focus, textarea:focus {
-            border-color: #38bdf8;
+            border-color: #0284c7;
+            background-color: #ffffff;
+            box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
         }
         .row {
             display: flex;
@@ -69,17 +75,18 @@
             background-color: #0284c7;
             color: white;
             border: none;
-            border-radius: 6px;
+            border-radius: 8px;
             font-size: 16px;
-            font-weight: bold;
+            font-weight: 600;
             cursor: pointer;
             transition: background 0.2s;
+            margin-top: 10px;
         }
         button:hover {
             background-color: #0369a1;
         }
         button:disabled {
-            background-color: #475569;
+            background-color: #94a3b8;
             cursor: not-allowed;
         }
         .progress-box {
@@ -87,14 +94,14 @@
             display: none;
         }
         .progress-bar-bg {
-            background-color: #334155;
+            background-color: #e2e8f0;
             border-radius: 10px;
             height: 12px;
             overflow: hidden;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
         .progress-bar-fill {
-            background-color: #38bdf8;
+            background-color: #0284c7;
             height: 100%;
             width: 0%;
             transition: width 0.1s linear;
@@ -102,23 +109,27 @@
         .status-text {
             font-size: 14px;
             text-align: center;
-            color: #cbd5e1;
+            color: #475569;
+            font-weight: 500;
         }
         .alert {
-            margin-top: 15px;
+            margin-top: 18px;
             padding: 12px;
-            border-radius: 6px;
+            border-radius: 8px;
             font-size: 14px;
             text-align: center;
             display: none;
+            font-weight: 500;
         }
         .alert-error {
-            background-color: #7f1d1d;
-            color: #fca5a5;
+            background-color: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
         }
         .alert-success {
-            background-color: #14532d;
-            color: #86efac;
+            background-color: #f0fdf4;
+            color: #16a34a;
+            border: 1px solid #bbf7d0;
         }
     </style>
 </head>
@@ -180,11 +191,9 @@
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
 
-        // Clear Alerts
         errorAlert.style.display = 'none';
         successAlert.style.display = 'none';
         
-        // Disable Button & Show Progress
         sendBtn.disabled = true;
         progressBox.style.display = 'block';
         progressFill.style.width = '0%';
