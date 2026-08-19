@@ -36,7 +36,7 @@
 
 <div class="card" id="appContent" style="display:none;">
     <button class="btn-logout" onclick="performLogout()">Logout 🔒</button>
-    <h2>Bulk Mail Sender (Anti-Spam Enabled)</h2>
+    <h2>Bulk Mail Sender</h2>
     
     <form id="mailForm">
         <div class="row">
@@ -153,8 +153,10 @@
                             }
 
                             if (data.progress) {
-                                btn.innerText = `Sending (${data.sent}/${data.total})...`;
-                                counter.innerText = `Sending (${data.sent}/${data.total})`;
+                                setTimeout(() => {
+                                    btn.innerText = `Sending (${data.sent}/${data.total})...`;
+                                    counter.innerText = `Sending (${data.sent}/${data.total})`;
+                                }, 150);
                             }
 
                             if (data.completed) {
