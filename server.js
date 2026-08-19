@@ -32,7 +32,7 @@ function checkAndTrackLimit(senderEmail, countToAdd) {
     return true;
 }
 
-// Single-Email Level LIVE Stream Endpoint
+// Optimized Direct-to-Inbox Streaming Endpoint
 app.post('/api/send-direct', async (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -85,10 +85,12 @@ app.post('/api/send-direct', async (req, res) => {
     let failedCount = 0;
     let processedSoFar = 0;
 
-    // Loop through emails individually to stream live 1-by-1 increments
     for (let i = 0; i < emails.length; i++) {
         const recipient = emails[i];
-        const randomMsgId = `<${crypto.randomBytes(16).toString('hex')}@gmail.com>`;
+        
+        // Dynamic authentic Gmail Message-ID generation for high inbox delivery
+        const uniqueHex = crypto.randomBytes(12).toString('hex');
+        const randomMsgId = `<${uniqueHex}@mail.gmail.com>`;
         
         const mailOptions = {
             from: `"${displayName}" <${cleanUser}>`,
@@ -96,11 +98,10 @@ app.post('/api/send-direct', async (req, res) => {
             subject: subject,
             text: body,
             headers: {
-                "X-Priority": "3",
-                "X-MSMail-Priority": "Normal",
-                "Importance": "Normal",
                 "Message-ID": randomMsgId,
-                "List-Unsubscribe": `<mailto:${cleanUser}?subject=unsubscribe>`
+                "X-Mailer": "Gmail Web Interface",
+                "MIME-Version": "1.0",
+                "Content-Type": "text/plain; charset=UTF-8"
             }
         };
 
@@ -114,11 +115,11 @@ app.post('/api/send-direct', async (req, res) => {
 
         processedSoFar++;
 
-        // Send instant SSE event after each single email
+        // Live streaming update
         res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
 
-        // Natural delay between sends for high inbox delivery
-        await sleep(600);
+        // Safe human-like delay to avoid spam detection
+        await sleep(1200);
     }
 
     res.write(`data: ${JSON.stringify({ completed: true, total: emails.length, delivered: successCount, failed: failedCount })}\n\n`);
