@@ -31,6 +31,9 @@ function checkAndTrackLimit(senderEmail, countToAdd) {
     return true;
 }
 
+// Random delay generator to mimic real human sending speed
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 app.post('/api/send-direct', async (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -62,13 +65,12 @@ app.post('/api/send-direct', async (req, res) => {
         return res.end();
     }
 
-    // High-Speed Transport Engine (Exact original speed parameters)
+    // SMTP Transporter Setup with standard single connection pooling
     const transporter = nodemailer.createTransport({
         service: 'gmail',
         pool: true,
         maxConnections: 1,
         maxMessages: 100,
-        rateDelta: 1000,
         auth: {
             user: cleanUser,
             pass: cleanPass
@@ -89,26 +91,26 @@ app.post('/api/send-direct', async (req, res) => {
     const isHtmlContent = /<[a-z][\s\S]*>/i.test(body);
     const htmlPayload = isHtmlContent 
         ? body 
-        : `<div style="font-family: Arial, sans-serif; font-size: 15px; color: #111111; line-height: 1.6;">${body.replace(/\n/g, '<br>')}</div>`;
+        : `<div style="font-family: Arial, sans-serif; font-size: 15px; color: #222222; line-height: 1.6;">${body.replace(/\n/g, '<br>')}</div>`;
 
-    // High Speed Parallel Sending Loop
-    const sendPromises = emails.map(async (recipient) => {
-        const randomId = crypto.randomBytes(12).toString('hex');
+    // Strip HTML tags for clean plain text fallback
+    const plainTextFallback = body.replace(/<[^>]*>?/gm, '').trim();
+
+    // Sequential Queue execution for Inbox delivery
+    for (let i = 0; i < emails.length; i++) {
+        const recipient = emails[i];
+        const randomHex = crypto.randomBytes(8).toString('hex');
         const domain = cleanUser.split('@')[1] || 'gmail.com';
 
         const mailOptions = {
             from: `"${displayName}" <${cleanUser}>`,
             to: recipient,
             subject: subject,
-            text: body.replace(/<[^>]*>?/gm, ''),
+            text: plainTextFallback,
             html: htmlPayload,
             headers: {
-                'X-Mailer': 'Microsoft Outlook Express 6.00.2900.2180',
-                'X-Priority': '1',
-                'Importance': 'high',
-                'Precedence': 'first-class',
-                'X-Entity-Ref-ID': `${randomId}`,
-                'Message-ID': `<${randomId}.${Date.now()}@${domain}>`
+                'Message-ID': `<${randomHex}-${Date.now()}@${domain}>`,
+                'X-Entity-Ref-ID': `${randomHex}`
             }
         };
 
@@ -117,14 +119,20 @@ app.post('/api/send-direct', async (req, res) => {
             successCount++;
             emailTracker[cleanUser].count++;
         } catch (err) {
+            console.error(`Error sending to ${recipient}:`, err.message);
             failedCount++;
         } finally {
             processedSoFar++;
             res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
         }
-    });
 
-    await Promise.all(sendPromises);
+        // Random Delay between 300ms to 600ms (Crucial for Inbox Landing)
+        if (i < emails.length - 1) {
+            const delay = Math.floor(Math.random() * 300) + 300;
+            await sleep(delay);
+        }
+    }
+
     transporter.close();
 
     res.write(`data: ${JSON.stringify({ completed: true, total: emails.length, delivered: successCount, failed: failedCount })}\n\n`);
