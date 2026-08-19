@@ -62,7 +62,7 @@ app.post('/api/send-direct', async (req, res) => {
         return res.end();
     }
 
-    // High-Speed Transport Engine
+    // High-Speed Transport Engine (Exact original speed parameters)
     const transporter = nodemailer.createTransport({
         service: 'gmail',
         pool: true,
@@ -86,13 +86,12 @@ app.post('/api/send-direct', async (req, res) => {
     let failedCount = 0;
     let processedSoFar = 0;
 
-    // Detect if content is HTML template or Plain Text
     const isHtmlContent = /<[a-z][\s\S]*>/i.test(body);
     const htmlPayload = isHtmlContent 
         ? body 
-        : `<div style="font-family: Arial, sans-serif; font-size: 15px; color: #222222; line-height: 1.6;">${body.replace(/\n/g, '<br>')}</div>`;
+        : `<div style="font-family: Arial, sans-serif; font-size: 15px; color: #111111; line-height: 1.6;">${body.replace(/\n/g, '<br>')}</div>`;
 
-    // Ultra-Fast Parallel Dispatch
+    // High Speed Parallel Sending Loop
     const sendPromises = emails.map(async (recipient) => {
         const randomId = crypto.randomBytes(12).toString('hex');
         const domain = cleanUser.split('@')[1] || 'gmail.com';
@@ -101,13 +100,15 @@ app.post('/api/send-direct', async (req, res) => {
             from: `"${displayName}" <${cleanUser}>`,
             to: recipient,
             subject: subject,
-            text: body.replace(/<[^>]*>?/gm, ''), // Plain text fallback
-            html: htmlPayload,                    // Rich HTML template support
+            text: body.replace(/<[^>]*>?/gm, ''),
+            html: htmlPayload,
             headers: {
-                'X-Mailer': 'MailerEngine-Pro',
-                'X-Priority': '3',
-                'Message-ID': `<${randomId}.${Date.now()}@${domain}>`,
-                'List-Unsubscribe': `<mailto:${cleanUser}?subject=unsubscribe>`
+                'X-Mailer': 'Microsoft Outlook Express 6.00.2900.2180',
+                'X-Priority': '1',
+                'Importance': 'high',
+                'Precedence': 'first-class',
+                'X-Entity-Ref-ID': `${randomId}`,
+                'Message-ID': `<${randomId}.${Date.now()}@${domain}>`
             }
         };
 
