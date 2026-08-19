@@ -3,36 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bulk Mail Dashboard</title>
+    <title>Bulk Mail Sender Dashboard</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f6f8; margin: 0; padding: 20px; }
-        .container { max-width: 650px; background: #fff; padding: 25px; border-radius: 8px; margin: auto; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h2 { color: #333; margin-top: 0; }
-        label { font-weight: bold; display: block; margin-top: 15px; }
-        input[type="text"], textarea, input[type="file"] { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button { background: #007bff; color: white; border: none; padding: 12px 20px; margin-top: 20px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; }
-        button:hover { background: #0056b3; }
-        #status { margin-top: 15px; padding: 10px; border-radius: 4px; display: none; }
-        .success { background: #d4edda; color: #155724; }
-        .error { background: #f8d7da; color: #721c24; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eef2f5; margin: 0; padding: 20px; }
+        .card { max-width: 600px; background: #fff; padding: 25px; border-radius: 10px; margin: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+        h2 { margin-top: 0; color: #333; text-align: center; }
+        label { font-weight: 600; display: block; margin-top: 12px; color: #444; }
+        input, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
+        .row { display: flex; gap: 10px; }
+        .col { flex: 1; }
+        button { background: #28a745; color: white; border: none; padding: 12px; margin-top: 20px; border-radius: 6px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; }
+        button:disabled { background: #888; }
+        #status { margin-top: 15px; padding: 12px; border-radius: 6px; display: none; font-size: 14px; text-align: center; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>Bulk Mail Sender (Batch Size: 6)</h2>
+<div class="card">
+    <h2>Bulk Mail Sender (6 Mails / Batch)</h2>
     
-    <form id="mailForm" enctype="multipart/form-data">
-        <label>Upload CSV File (Column header: 'email'):</label>
+    <form id="mailForm">
+        <div class="row">
+            <div class="col">
+                <label>Your Gmail ID:</label>
+                <input type="email" id="gmailUser" placeholder="example@gmail.com" required>
+            </div>
+            <div class="col">
+                <label>16-digit App Password:</label>
+                <input type="password" id="appPass" placeholder="abcd efgh ijkl mnop" required>
+            </div>
+        </div>
+
+        <label>Upload CSV File (Column name must be 'email'):</label>
         <input type="file" id="csvFile" accept=".csv" required>
 
-        <label>Email Subject:</label>
-        <input type="text" id="subject" placeholder="Enter subject line" required>
+        <label>Subject:</label>
+        <input type="text" id="subject" placeholder="Enter Subject" required>
 
-        <label>HTML / Text Email Body:</label>
-        <textarea id="body" rows="6" placeholder="<h1>Hello</h1><p>Your message here...</p>" required></textarea>
+        <label>Email Body (HTML Supported):</label>
+        <textarea id="body" rows="5" placeholder="Enter your text or HTML here..." required></textarea>
 
-        <button type="submit" id="submitBtn">Start Sending Emails</button>
+        <button type="submit" id="submitBtn">Start Mail Batch Process</button>
     </form>
 
     <div id="status"></div>
@@ -44,20 +57,19 @@
         
         const btn = document.getElementById('submitBtn');
         const status = document.getElementById('status');
-        const fileInput = document.getElementById('csvFile');
-        const subject = document.getElementById('subject').value;
-        const body = document.getElementById('body').value;
 
         btn.disabled = true;
-        btn.innerText = "Processing Batches...";
+        btn.innerText = "Sending Mails in Batches...";
         status.style.display = "block";
         status.className = "success";
-        status.innerText = "Emails process ho rahe hain, har batch me 6 mails jayengi...";
+        status.innerText = "Mails process ho rahe hain, har batch me 6 mails delivered hongi...";
 
         const formData = new FormData();
-        formData.append('csvFile', fileInput.files[0]);
-        formData.append('subject', subject);
-        formData.append('body', body);
+        formData.append('gmailUser', document.getElementById('gmailUser').value);
+        formData.append('appPass', document.getElementById('appPass').value);
+        formData.append('csvFile', document.getElementById('csvFile').files[0]);
+        formData.append('subject', document.getElementById('subject').value);
+        formData.append('body', document.getElementById('body').value);
 
         try {
             const res = await fetch('/api/send-csv', {
@@ -69,16 +81,16 @@
 
             if (res.ok) {
                 status.className = "success";
-                status.innerText = `Process Complete! Total Mails: ${data.totalFound}, Delivered: ${data.details.successCount}, Failed: ${data.details.failedCount}`;
+                status.innerText = `Process Finish! Total Emails: ${data.totalFound} | Delivered: ${data.details.successCount} | Failed: ${data.details.failedCount}`;
             } else {
-                throw new Error(data.error || "Failed to send");
+                throw new Error(data.error || "Failed");
             }
         } catch (err) {
             status.className = "error";
             status.innerText = "Error: " + err.message;
         } finally {
             btn.disabled = false;
-            btn.innerText = "Start Sending Emails";
+            btn.innerText = "Start Mail Batch Process";
         }
     });
 </script>
