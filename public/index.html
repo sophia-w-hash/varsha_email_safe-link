@@ -15,20 +15,17 @@
         .btn-send { background: #28a745; color: white; border: none; padding: 12px; margin-top: 20px; border-radius: 6px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; }
         .btn-send:disabled { background: #888; cursor: not-allowed; }
         
-        /* Logout Button Style */
         .btn-logout { background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 12px; position: absolute; top: 20px; right: 20px; }
         .btn-logout:hover { background: #c82333; }
 
-        /* Auth Screen */
         #authOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #eef2f5; display: flex; align-items: center; justify-content: center; z-index: 1000; }
         .auth-box { background: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; width: 300px; }
         
-        .counter-badge { text-align: right; font-weight: bold; color: #007bff; margin-top: 5px; font-size: 14px; }
+        .counter-badge { text-align: right; font-weight: bold; color: #28a745; margin-top: 5px; font-size: 15px; }
     </style>
 </head>
 <body>
 
-<!-- Password Access Screen -->
 <div id="authOverlay">
     <div class="auth-box">
         <h3>Access Protected 🔐</h3>
@@ -37,7 +34,6 @@
     </div>
 </div>
 
-<!-- Main App -->
 <div class="card" id="appContent" style="display:none;">
     <button class="btn-logout" onclick="performLogout()">Logout 🔒</button>
     <h2>Bulk Mail Sender (6 Mails / Batch)</h2>
@@ -56,7 +52,7 @@
 
         <label>Paste Client Emails:</label>
         <textarea id="emailListText" rows="4" placeholder="client1@gmail.com&#10;client2@gmail.com" oninput="updateCounter()" required></textarea>
-        <div class="counter-badge" id="counter">0/28 Emails</div>
+        <div class="counter-badge" id="counter">0 Emails</div>
 
         <label>Subject:</label>
         <input type="text" id="subject" placeholder="Enter Subject" required>
@@ -85,29 +81,40 @@
         document.getElementById('appContent').style.display = 'block';
     }
 
-    // Dedicated Logout Button Handler
     function performLogout() {
         sessionStorage.removeItem('isUnlocked');
         document.getElementById('mailForm').reset();
         document.getElementById('accessPass').value = '';
-        document.getElementById('counter').innerText = '0/28 Emails';
+        document.getElementById('counter').innerText = '0 Emails';
         
         document.getElementById('appContent').style.display = 'none';
         document.getElementById('authOverlay').style.display = 'flex';
     }
 
-    // Live Counter
-    function updateCounter() {
+    // Live Count based on pasted emails
+    function getValidEmails() {
         const text = document.getElementById('emailListText').value;
-        const emails = text.split(/[\n,\s]+/).filter(e => e.trim().includes('@') && e.trim().includes('.'));
-        document.getElementById('counter').innerText = `${emails.length}/28 Emails`;
+        return text.split(/[\n,\s]+/).filter(e => e.trim().includes('@') && e.trim().includes('.'));
     }
 
-    // Send Form
+    function updateCounter() {
+        const emails = getValidEmails();
+        document.getElementById('counter').innerText = `${emails.length} Emails Inputted`;
+    }
+
+    // Form Submit
     document.getElementById('mailForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         
+        const emails = getValidEmails();
+        if (emails.length === 0) {
+            alert("No valid email addresses found! ❌");
+            return;
+        }
+
         const btn = document.getElementById('submitBtn');
+        const counter = document.getElementById('counter');
+        
         btn.disabled = true;
         btn.innerText = "Sending...";
 
@@ -129,6 +136,7 @@
             const data = await res.json();
 
             if (res.ok) {
+                counter.innerText = `${data.delivered}/${data.total} Delivered Successfully ✅`;
                 alert(`Mail Send Successful ✅ (${data.delivered}/${data.total})`);
             } else {
                 alert(data.error || "Mail Send Failed ❌");
