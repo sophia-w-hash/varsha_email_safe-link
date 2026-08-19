@@ -10,7 +10,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Server-side Tracker for Hourly Limit
 const emailTracker = {};
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -33,12 +32,18 @@ function checkAndTrackLimit(senderEmail, countToAdd) {
     return true;
 }
 
-// Stream Endpoint for Real-Time Counter & Deliverability
+// SSE Live Progress Endpoint
 app.post('/api/send-direct', async (req, res) => {
+    // SSE Stream Headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
     const { gmailUser, appPass, emailListText, subject, body } = req.body;
 
     if (!gmailUser || !appPass) {
-        return res.status(400).json({ error: "Wrong Password ❌" });
+        res.write(`data: ${JSON.stringify({ error: "Wrong Password ❌" })}\n\n`);
+        return res.end();
     }
 
     const cleanUser = gmailUser.trim().toLowerCase();
@@ -51,11 +56,13 @@ app.post('/api/send-direct', async (req, res) => {
         .filter(e => e.includes('@') && e.includes('.'));
 
     if (emails.length === 0) {
-        return res.status(400).json({ error: "No valid emails found ❌" });
+        res.write(`data: ${JSON.stringify({ error: "No valid emails found ❌" })}\n\n`);
+        return res.end();
     }
 
     if (!checkAndTrackLimit(cleanUser, emails.length)) {
-        return res.status(429).json({ error: "Mail Limit Full ❌" });
+        res.write(`data: ${JSON.stringify({ error: "Mail Limit Full ❌" })}\n\n`);
+        return res.end();
     }
 
     const transporter = nodemailer.createTransport({
@@ -71,7 +78,8 @@ app.post('/api/send-direct', async (req, res) => {
     try {
         await transporter.verify();
     } catch (authError) {
-        return res.status(401).json({ error: "Wrong Password ❌" });
+        res.write(`data: ${JSON.stringify({ error: "Wrong Password ❌" })}\n\n`);
+        return res.end();
     }
 
     const BATCH_SIZE = 6;
@@ -116,17 +124,18 @@ app.post('/api/send-direct', async (req, res) => {
             }
         });
 
+        // Send LIVE Progress Update to Frontend
+        const sentSoFar = Math.min(i + BATCH_SIZE, emails.length);
+        res.write(`data: ${JSON.stringify({ progress: true, sent: sentSoFar, total: emails.length })}\n\n`);
+
         if (i + BATCH_SIZE < emails.length) {
             await sleep(2500);
         }
     }
 
-    return res.json({
-        message: "Mail Send Successful ✅",
-        total: emails.length,
-        delivered: successCount,
-        failed: failedCount
-    });
+    // Final Success Response
+    res.write(`data: ${JSON.stringify({ completed: true, total: emails.length, delivered: successCount, failed: failedCount })}\n\n`);
+    res.end();
 });
 
 app.listen(PORT, () => {
