@@ -101,7 +101,6 @@
         document.getElementById('counter').innerText = `${emails.length} Emails Inputted`;
     }
 
-    // Single-email step real-time counter listener
     document.getElementById('mailForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         
@@ -152,7 +151,6 @@
                             break;
                         }
 
-                        // Live increments 1/25, 2/25, 10/25...
                         if (data.progress) {
                             btn.innerText = `Sending (${data.sent}/${data.total})...`;
                             counter.innerText = `Sending (${data.sent}/${data.total})`;
