@@ -1,14 +1,13 @@
 {
   "name": "bulk-mailer",
   "version": "1.0.0",
-  "description": "Batch-wise Bulk Mail Sender with Gmail SMTP",
+  "description": "Bulk Mail Sender with Gmail App Password Input",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "csv-parser": "^3.0.0",
-    "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.9.13"
