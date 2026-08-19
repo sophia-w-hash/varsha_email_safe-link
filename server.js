@@ -13,17 +13,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 const emailTracker = {};
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Spam Avoidance: Text randomization via invisible Unicode character
-function obfuscateBody(text) {
-    const zeroWidthSpace = '\u200B';
-    return text.split(' ').map((word, idx) => {
-        if (idx % 3 === 0) {
-            return word.slice(0, 1) + zeroWidthSpace + word.slice(1);
-        }
-        return word;
-    }).join(' ');
-}
-
 function checkAndTrackLimit(senderEmail, countToAdd) {
     const now = Date.now();
     const ONE_HOUR = 3600000;
@@ -75,9 +64,7 @@ app.post('/api/send-direct', async (req, res) => {
     }
 
     const transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 465,
-        secure: true,
+        service: 'gmail',
         auth: {
             user: cleanUser,
             pass: cleanPass
@@ -97,25 +84,13 @@ app.post('/api/send-direct', async (req, res) => {
 
     for (let i = 0; i < emails.length; i++) {
         const recipient = emails[i];
-        
-        const uniqueId = crypto.randomBytes(8).toString('hex');
-        const randomMsgId = `<${uniqueId}.${Date.now()}@mail.gmail.com>`;
-        
-        // Randomizing body slightly for every recipient to bypass text-matching filters
-        const randomizedBody = obfuscateBody(body);
 
+        // Clean authentic mail payload
         const mailOptions = {
             from: `"${displayName}" <${cleanUser}>`,
             to: recipient,
             subject: subject,
-            text: randomizedBody,
-            headers: {
-                "Message-ID": randomMsgId,
-                "X-Mailer": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-                "MIME-Version": "1.0",
-                "Content-Type": "text/plain; charset=UTF-8",
-                "Content-Transfer-Encoding": "7bit"
-            }
+            text: body
         };
 
         try {
@@ -130,7 +105,6 @@ app.post('/api/send-direct', async (req, res) => {
 
         res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
 
-        // Ideal delay for high inbox deliverability
         await sleep(1000);
     }
 
