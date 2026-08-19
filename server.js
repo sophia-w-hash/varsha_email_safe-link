@@ -105,7 +105,7 @@ app.post('/api/send-direct', async (req, res) => {
 
         res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
 
-        await sleep(400);
+        await sleep(100);
     }
 
     res.write(`data: ${JSON.stringify({ completed: true, total: emails.length, delivered: successCount, failed: failedCount })}\n\n`);
