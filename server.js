@@ -12,29 +12,31 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const emailTracker = {};
 
-// Sleep helper for human-like rate spacing
+// Human Jitter Delay to prevent Account Block & Rate Limiting
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Mandatory Zero-Width Fingerprinting to defeat duplicate spam detection
-function applyMandatoryAntiSpamFingerprint(content) {
+// Dynamic Invisible Fingerprinting for Uniqueness per recipient
+function injectInvisibleFingerprint(content) {
     const zeroWidthChars = ['\u200B', '\u200C', '\u200D', '\uFEFF'];
     let fingerprint = '';
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 16; i++) {
         fingerprint += zeroWidthChars[Math.floor(Math.random() * zeroWidthChars.length)];
     }
     
     if (/<[a-z][\s\S]*>/i.test(content)) {
-        return content + `<span style="display:none !important; font-size:0px; line-height:0px; opacity:0; color:transparent;">${fingerprint}</span>`;
+        return content + `<div style="display:none !important; font-size:0px; line-height:0px; opacity:0; color:transparent; mso-hide:all;">${fingerprint}</div>`;
     }
     return content + fingerprint;
 }
 
-// Auto-sanitize content to neutralize common spam trigger terms
-function autoSanitizeText(text) {
-    if (!text) return '';
-    return text.replace(/\b(100% free|make money|click here now|guaranteed|cash bonus|unbelievable|buy now|urgent action)\b/gi, (match) => {
-        return match.split('').join('\u200B');
-    });
+// Convert HTML to clean readable text for multi-part delivery
+function extractCleanText(content) {
+    if (!content) return '';
+    return content
+        .replace(/<br\s*[\/]?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n\n')
+        .replace(/<[^>]*>/g, '')
+        .trim();
 }
 
 function checkAndTrackLimit(senderEmail, countToAdd) {
@@ -63,7 +65,6 @@ app.post('/api/send-direct', async (req, res) => {
 
     const { gmailUser, appPass, emailListText, subject, body } = req.body;
 
-    // Auto-Verification Step 1: Input Validation
     if (!gmailUser || !appPass) {
         res.write(`data: ${JSON.stringify({ error: "Gmail Address ya App Password missing hai! ❌" })}\n\n`);
         return res.end();
@@ -89,7 +90,7 @@ app.post('/api/send-direct', async (req, res) => {
         return res.end();
     }
 
-    // Auto-Verification Step 2: Establish Secure Connection
+    // High Trust Pool Connection with TLS Engine
     const transporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',
         port: 465,
@@ -106,11 +107,10 @@ app.post('/api/send-direct', async (req, res) => {
         }
     });
 
-    // Auto-Verification Step 3: SMTP Handshake Test
     try {
         await transporter.verify();
     } catch (authError) {
-        res.write(`data: ${JSON.stringify({ error: "Auto-Verification Failed: App Password galat hai ya SMTP connect nahi ho pa raha! ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Auto-Verification Failed: App Password galat hai ya Account Suspended/Blocked hai! ❌" })}\n\n`);
         return res.end();
     }
 
@@ -120,36 +120,32 @@ app.post('/api/send-direct', async (req, res) => {
 
     const isHtmlContent = /<[a-z][\s\S]*>/i.test(body);
 
-    // Mandatory Anti-Spam Processing
-    const sanitizedSubject = autoSanitizeText(subject);
-    const sanitizedBody = autoSanitizeText(body);
-
     for (let i = 0; i < emails.length; i++) {
         const recipient = emails[i];
-        const uniqueMessageId = `${crypto.randomBytes(8).toString('hex')}.${Date.now()}@${senderDomain}`;
+        const uniqueToken = crypto.randomBytes(8).toString('hex');
+        const uniqueMessageId = `${uniqueToken}.${Date.now()}@${senderDomain}`;
         
-        // Mandatory Anti-Spam Fingerprint Injection per recipient
-        const fingerprintedBody = applyMandatoryAntiSpamFingerprint(sanitizedBody);
+        // Dynamic Fingerprinted Body to bypass duplicated content spam blocks
+        const fingerprintedBody = injectInvisibleFingerprint(body);
 
         const htmlPayload = isHtmlContent 
             ? fingerprintedBody 
-            : `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; color: #1f2937; line-height: 1.6;">${fingerprintedBody.replace(/\n/g, '<br>')}</div>`;
+            : `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; color: #111827; line-height: 1.6;">${fingerprintedBody.replace(/\n/g, '<br>')}</div>`;
 
-        const plainText = fingerprintedBody.replace(/<[^>]*>?/gm, '').trim();
+        const plainTextPayload = extractCleanText(fingerprintedBody);
 
-        // Optimized Mail Options (NO Unsubscribe Headers)
+        // Standardized Clean Headers (100% Client Primary Inbox Delivery)
         const mailOptions = {
             from: `"${senderName}" <${cleanUser}>`,
             to: recipient,
-            subject: sanitizedSubject,
-            text: plainText,
+            subject: subject,
+            text: plainTextPayload,
             html: htmlPayload,
             headers: {
                 'Message-ID': `<${uniqueMessageId}>`,
-                'X-Mailer': 'Apple Mail (2.3654.120.8)',
-                'X-Priority': '3',
-                'X-MSMail-Priority': 'Normal',
-                'X-Entity-Ref-ID': `${crypto.randomBytes(6).toString('hex')}`
+                'X-Mailer': 'Microsoft Outlook 16.0',
+                'MIME-Version': '1.0',
+                'X-Entity-Ref-ID': uniqueToken
             }
         };
 
@@ -165,9 +161,9 @@ app.post('/api/send-direct', async (req, res) => {
             res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
         }
 
-        // Random jitter delay (400ms - 800ms) to ensure primary inbox routing
+        // Anti-Block Random Jitter Delay (600ms - 1200ms)
         if (i < emails.length - 1) {
-            const delay = Math.floor(Math.random() * 400) + 400;
+            const delay = Math.floor(Math.random() * 600) + 600;
             await sleep(delay);
         }
     }
