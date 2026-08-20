@@ -50,7 +50,7 @@ function checkAndTrackLimit(senderEmail, countToAdd) {
     }
 
     // Recommended limit for 99% Primary Inbox delivery
-    if (emailTracker[senderEmail].count + countToAdd > 20) {
+    if (emailTracker[senderEmail].count + countToAdd > 25) {
         return false;
     }
 
@@ -98,8 +98,8 @@ app.post('/api/send-direct', async (req, res) => {
             pass: cleanPass
         },
         pool: true,
-        maxConnections: 1,
-        maxMessages: 10000
+        maxConnections: 6,
+        maxMessages: 100000
     });
 
     try {
