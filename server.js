@@ -15,11 +15,10 @@ const emailTracker = {};
 // Sleep Helper
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Random Human-like Delay (1 to 2 seconds) - Crucial for Inbox Rate
-const getHumanDelay = () => Math.floor(Math.random() * (2000 - 1000 + 1)) + 1000;
+// Fast Speed Delay (1 to 2 seconds)
+const getFastDelay = () => Math.floor(Math.random() * (2000 - 1000 + 1)) + 1000;
 
 // Dynamic Text Variable Generator (Spintax Parser)
-// Example Input: "{Hi|Hello|Hey} {Friend|User}, hope you are doing well!"
 function parseSpintax(text) {
     if (!text) return '';
     return text.replace(/\{([^{}]+)\}/g, (match, choices) => {
@@ -33,7 +32,7 @@ function sanitizeSpamWords(text) {
     if (!text) return '';
     return text
         .replace(/\b(FREE|BUY NOW|100%|CLICK HERE|EARN MONEY|URGENT|GUARANTEED)\b/gi, (match) => {
-            return match.charAt(0) + ' ' + match.slice(1); // Adds space between letters to bypass regex filters
+            return match.charAt(0) + ' ' + match.slice(1);
         });
 }
 
@@ -49,7 +48,6 @@ function checkAndTrackLimit(senderEmail, countToAdd) {
         emailTracker[senderEmail] = { count: 0, startTime: now };
     }
 
-    // Recommended limit for 99% Primary Inbox delivery
     if (emailTracker[senderEmail].count + countToAdd > 25) {
         return false;
     }
@@ -84,11 +82,11 @@ app.post('/api/send-direct', async (req, res) => {
     }
 
     if (!checkAndTrackLimit(cleanUser, emails.length)) {
-        res.write(`data: ${JSON.stringify({ error: "Safe Hourly Limit Reached (Max 20 Mails/Hour for High Inbox Rate) ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Safe Hourly Limit Reached (Max 25 Mails/Hour) ❌" })}\n\n`);
         return res.end();
     }
 
-    // Direct High-Priority Transport
+    // Direct Safe High-Priority Transport Setup
     const transporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',
         port: 465,
@@ -98,8 +96,8 @@ app.post('/api/send-direct', async (req, res) => {
             pass: cleanPass
         },
         pool: true,
-        maxConnections: 6,
-        maxMessages: 100000
+        maxConnections: 3, // Optimal connection threshold for Gmail SMTP
+        maxMessages: 100
     });
 
     try {
@@ -116,12 +114,11 @@ app.post('/api/send-direct', async (req, res) => {
     for (let i = 0; i < emails.length; i++) {
         const recipient = emails[i];
 
-        // Unique dynamic Spintax resolution per recipient
         const dynamicSubject = sanitizeSpamWords(parseSpintax(subject));
         const dynamicBody = sanitizeSpamWords(parseSpintax(body));
 
         const domain = cleanUser.split('@')[1] || 'gmail.com';
-        const uniqueMessageId = `<${crypto.randomBytes(12).toString('hex')}@${domain}>`;
+        const uniqueMessageId = `<${crypto.randomBytes(10).toString('hex')}.${Date.now()}@${domain}>`;
 
         const mailOptions = {
             from: `"${cleanSenderName}" <${cleanUser}>`,
@@ -131,7 +128,7 @@ app.post('/api/send-direct', async (req, res) => {
             html: `<div style="font-family: Arial, sans-serif; font-size: 15px; color: #1a1a1a; line-height: 1.6;">${dynamicBody.replace(/\n/g, '<br>')}</div>`,
             headers: {
                 'Message-ID': uniqueMessageId,
-                'X-Mailer': 'Outlook-Express/11.0',
+                'X-Mailer': 'Apple Mail (2.3654.120.8)',
                 'X-Priority': '3',
                 'MIME-Version': '1.0'
             }
@@ -149,9 +146,9 @@ app.post('/api/send-direct', async (req, res) => {
             res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
         }
 
-        // Apply Natural Humanized Delay
+        // Fast Speed Delay (1 to 2 sec)
         if (i < emails.length - 1) {
-            const delay = getHumanDelay();
+            const delay = getFastDelay();
             await sleep(delay);
         }
     }
