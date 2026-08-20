@@ -6,11 +6,14 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const emailTracker = {};
+
+// Humanized delay generator (6000ms to 10000ms) to prevent Instant Spam Flagging
+const getRandomDelay = () => Math.floor(Math.random() * (10000 - 6000 + 1)) + 6000;
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 function checkAndTrackLimit(senderEmail, countToAdd) {
@@ -37,16 +40,17 @@ app.post('/api/send-direct', async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    const { gmailUser, appPass, emailListText, subject, body } = req.body;
+    const { senderName, gmailUser, appPass, emailListText, subject, body } = req.body;
 
     if (!gmailUser || !appPass) {
-        res.write(`data: ${JSON.stringify({ error: "Wrong Password ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Wrong Password or Missing Credentials ❌" })}\n\n`);
         return res.end();
     }
 
     const cleanUser = gmailUser.trim().toLowerCase();
     const cleanPass = appPass.replace(/\s+/g, '');
-    const displayName = cleanUser.split('@')[0];
+    const cleanSenderName = senderName && senderName.trim() ? senderName.trim() : cleanUser.split('@')[0];
+    const senderDomain = cleanUser.split('@')[1] || 'gmail.com';
 
     const emails = emailListText
         .split(/[\n,\s]+/)
@@ -59,22 +63,28 @@ app.post('/api/send-direct', async (req, res) => {
     }
 
     if (!checkAndTrackLimit(cleanUser, emails.length)) {
-        res.write(`data: ${JSON.stringify({ error: "Mail Limit Full ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Hourly Limit Reached (Max 25/hr) ❌" })}\n\n`);
         return res.end();
     }
 
+    // High Trust Direct Connection Setup
     const transporter = nodemailer.createTransport({
-        service: 'gmail',
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,
         auth: {
             user: cleanUser,
             pass: cleanPass
+        },
+        tls: {
+            rejectUnauthorized: false
         }
     });
 
     try {
         await transporter.verify();
     } catch (authError) {
-        res.write(`data: ${JSON.stringify({ error: "Wrong Password ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Authentication Failed! App Password re-check karein. ❌" })}\n\n`);
         return res.end();
     }
 
@@ -82,15 +92,26 @@ app.post('/api/send-direct', async (req, res) => {
     let failedCount = 0;
     let processedSoFar = 0;
 
+    // Remove any raw HTML tags to guarantee a clean text body
+    const cleanBodyText = body.replace(/<[^>]*>?/gm, '').trim();
+
     for (let i = 0; i < emails.length; i++) {
         const recipient = emails[i];
+        const uniqueToken = crypto.randomBytes(6).toString('hex');
+        const uniqueMessageId = `<${uniqueToken}.${Date.now()}@${senderDomain}>`;
 
-        // Clean authentic mail payload
+        // Clean dual-part structure (Text + Mild HTML) for max filter pass-through
         const mailOptions = {
-            from: `"${displayName}" <${cleanUser}>`,
+            from: `"${cleanSenderName}" <${cleanUser}>`,
             to: recipient,
             subject: subject,
-            text: body
+            text: cleanBodyText,
+            html: `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #222222; line-height: 1.6;">${cleanBodyText.replace(/\n/g, '<br>')}</div>`,
+            headers: {
+                'Message-ID': uniqueMessageId,
+                'X-Mailer': 'Apple Mail (2.3654.120.8)',
+                'MIME-Version': '1.0'
+            }
         };
 
         try {
@@ -98,15 +119,21 @@ app.post('/api/send-direct', async (req, res) => {
             successCount++;
             emailTracker[cleanUser].count++;
         } catch (err) {
+            console.error(`Error sending to ${recipient}:`, err.message);
             failedCount++;
+        } finally {
+            processedSoFar++;
+            res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
         }
 
-        processedSoFar++;
-
-        res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
-
-        await sleep(10);
+        // Apply intelligent humanized delay between requests
+        if (i < emails.length - 1) {
+            const delay = getRandomDelay();
+            await sleep(delay);
+        }
     }
+
+    transporter.close();
 
     res.write(`data: ${JSON.stringify({ completed: true, total: emails.length, delivered: successCount, failed: failedCount })}\n\n`);
     res.end();
