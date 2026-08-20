@@ -1,13 +1,12 @@
 const express = require('express');
 const nodemailer = require('nodemailer');
 const path = require('path');
-const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json({ limit: '15mb' }));
-app.use(express.urlencoded({ extended: true, limit: '15mb' }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -17,16 +16,15 @@ app.post('/api/send-direct', async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    const { gmailUser, appPass, emailListText, subject, body, footerLink, imageUrl } = req.body;
+    const { gmailUser, appPass, emailListText, subject, body } = req.body;
 
     if (!gmailUser || !appPass) {
-        res.write(`data: ${JSON.stringify({ error: "Gmail ya App Password missing hai! ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Gmail Address ya App Password missing hai! ❌" })}\n\n`);
         return res.end();
     }
 
     const cleanUser = gmailUser.trim().toLowerCase();
     const cleanPass = appPass.replace(/\s+/g, '');
-    const senderName = cleanUser.split('@')[0];
 
     const emails = emailListText
         .split(/[\n,\s]+/)
@@ -38,6 +36,7 @@ app.post('/api/send-direct', async (req, res) => {
         return res.end();
     }
 
+    // Standard Direct SMTP Connection
     const transporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',
         port: 465,
@@ -51,7 +50,7 @@ app.post('/api/send-direct', async (req, res) => {
     try {
         await transporter.verify();
     } catch (authError) {
-        res.write(`data: ${JSON.stringify({ error: "SMTP Authentication Failed! App Password check karein. ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Authentication Failed! App Password re-check karein. ❌" })}\n\n`);
         return res.end();
     }
 
@@ -59,47 +58,33 @@ app.post('/api/send-direct', async (req, res) => {
     let failedCount = 0;
     let processedSoFar = 0;
 
+    // Remove any HTML tags to keep body pure text
+    const cleanBodyText = body.replace(/<[^>]*>?/gm, '').trim();
+
     for (let i = 0; i < emails.length; i++) {
         const recipient = emails[i];
 
-        // Safe Footer Construction
-        let footerHtml = '';
-        if (imageUrl || footerLink) {
-            footerHtml = `
-                <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280;">
-                    ${imageUrl ? `<img src="${imageUrl}" alt="Footer Banner" style="max-width: 100%; height: auto; border-radius: 6px; margin-bottom: 10px;"><br>` : ''}
-                    ${footerLink ? `<a href="${footerLink}" style="color: #2563eb; text-decoration: underline;" target="_blank">Visit Official Link</a>` : ''}
-                </div>
-            `;
-        }
-
-        const fullHtml = `
-            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #1f2937; line-height: 1.6;">
-                <div>${body.replace(/\n/g, '<br>')}</div>
-                ${footerHtml}
-            </div>
-        `;
-
         const mailOptions = {
-            from: `"${senderName}" <${cleanUser}>`,
+            from: cleanUser,
             to: recipient,
             subject: subject,
-            html: fullHtml
+            text: cleanBodyText
         };
 
         try {
             await transporter.sendMail(mailOptions);
             successCount++;
         } catch (err) {
+            console.error(`Failed to send to ${recipient}:`, err.message);
             failedCount++;
         } finally {
             processedSoFar++;
             res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
         }
 
-        // Safety Delay (1 Seconds)
+        // 8 Seconds delay between each mail to avoid Gmail rate-limiting
         if (i < emails.length - 1) {
-            await sleep(1000);
+            await sleep(8000);
         }
     }
 
