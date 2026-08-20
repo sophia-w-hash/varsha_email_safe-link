@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fast Bulk Email Dispatcher Pro</title>
+    <title>Clean Email Dispatcher</title>
     <style>
         * {
             box-sizing: border-box;
@@ -20,8 +20,6 @@
             min-height: 100vh;
             padding: 20px;
         }
-
-        /* Lock Screen Overlay */
         .lock-screen {
             position: fixed;
             top: 0;
@@ -54,7 +52,6 @@
             color: #64748b;
             margin-bottom: 20px;
         }
-
         .container {
             background-color: #ffffff;
             padding: 35px;
@@ -64,7 +61,6 @@
             max-width: 680px;
             border: 1px solid #e2e8f0;
             display: none;
-            position: relative;
         }
         .header-bar {
             display: flex;
@@ -77,8 +73,6 @@
             font-size: 24px;
             font-weight: 700;
         }
-
-        /* Double Click Logout Button */
         .btn-logout {
             background-color: #ef4444;
             color: white;
@@ -94,7 +88,6 @@
         .btn-logout:hover {
             background-color: #dc2626;
         }
-
         .form-group {
             margin-bottom: 16px;
         }
@@ -127,36 +120,6 @@
         .row .form-group {
             flex: 1;
         }
-        
-        .spam-protection-locked {
-            background-color: #f0fdf4;
-            border: 1px solid #bbf7d0;
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 18px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .spam-protection-locked span {
-            font-size: 14px;
-            font-weight: 600;
-            color: #15803d;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .badge-locked {
-            background-color: #16a34a;
-            color: white;
-            font-size: 11px;
-            padding: 4px 10px;
-            border-radius: 12px;
-            text-transform: uppercase;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-        }
-
         button.btn-submit {
             width: 100%;
             padding: 14px;
@@ -177,7 +140,6 @@
             background-color: #94a3b8;
             cursor: not-allowed;
         }
-
         .progress-box {
             margin-top: 20px;
             display: none;
@@ -224,24 +186,22 @@
 </head>
 <body>
 
-<!-- Lock Screen -->
 <div class="lock-screen" id="lockScreen">
     <div class="lock-card">
         <h3>Protected Access 🔒</h3>
         <p>Please enter the access password to continue.</p>
         <div class="form-group">
-            <input type="password" id="accessPassInput" placeholder="Enter Access Password" required>
+            <input type="password" id="accessPassInput" placeholder="Enter Password" required>
         </div>
         <button id="loginBtn" onclick="verifyAccess()" class="btn-submit">Unlock App</button>
         <div class="alert alert-error" id="lockError" style="margin-top: 12px;">Wrong Password! ❌</div>
     </div>
 </div>
 
-<!-- Main Dashboard -->
 <div class="container" id="mainContainer">
     <div class="header-bar">
-        <h2>Fast Bulk Email Dispatcher</h2>
-        <button type="button" class="btn-logout" id="logoutBtn" title="Double Click to Logout">Logout (Double Click)</button>
+        <h2>Clean Direct Email Dispatcher</h2>
+        <button type="button" class="btn-logout" id="logoutBtn">Logout (Double Click)</button>
     </div>
 
     <form id="emailForm">
@@ -267,23 +227,18 @@
         </div>
 
         <div class="form-group">
-            <label for="body">Email Message / HTML Template</label>
-            <textarea id="body" rows="6" placeholder="Type plain text or paste full HTML template code here..." required></textarea>
+            <label for="body">Plain Text Message (No HTML/Links)</label>
+            <textarea id="body" rows="6" placeholder="Type plain simple text message..." required></textarea>
         </div>
 
-        <div class="spam-protection-locked">
-            <span>🛡️ Anti-Spam Inbox Shield</span>
-            <span class="badge-locked">LOCKED &amp; ACTIVE</span>
-        </div>
-
-        <button type="submit" id="sendBtn" class="btn-submit">Send Emails Now</button>
+        <button type="submit" id="sendBtn" class="btn-submit">Send Plain Text Emails</button>
     </form>
 
     <div class="progress-box" id="progressBox">
         <div class="progress-bar-bg">
             <div class="progress-bar-fill" id="progressFill"></div>
         </div>
-        <div class="status-text" id="statusText">Verifying credentials &amp; preparing delivery...</div>
+        <div class="status-text" id="statusText">Verifying credentials & sending...</div>
     </div>
 
     <div class="alert alert-error" id="errorAlert"></div>
@@ -300,8 +255,7 @@
     const logoutBtn = document.getElementById('logoutBtn');
 
     function verifyAccess() {
-        const enteredPass = accessPassInput.value;
-        if (enteredPass === CORRECT_ACCESS_PASS) {
+        if (accessPassInput.value === CORRECT_ACCESS_PASS) {
             lockScreen.style.display = 'none';
             mainContainer.style.display = 'block';
             sessionStorage.setItem('isAppUnlocked', 'true');
@@ -317,12 +271,9 @@
     }
 
     accessPassInput.addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') {
-            verifyAccess();
-        }
+        if (e.key === 'Enter') verifyAccess();
     });
 
-    // Double Click Logout Action
     let clickTimer = null;
     logoutBtn.addEventListener('click', function() {
         if (clickTimer === null) {
@@ -362,7 +313,7 @@
         sendBtn.disabled = true;
         progressBox.style.display = 'block';
         progressFill.style.width = '0%';
-        statusText.innerText = 'Verifying credentials & preparing delivery...';
+        statusText.innerText = 'Connecting to server...';
 
         const payload = {
             gmailUser: document.getElementById('gmailUser').value,
@@ -419,7 +370,7 @@
                 }
             }
         } catch (err) {
-            showError('Network error or server connection failed.');
+            showError('Server connection failed.');
             resetUI();
         }
     });
