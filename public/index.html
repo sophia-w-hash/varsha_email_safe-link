@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fast Bulk Email Dispatcher</title>
+    <title>Fast Bulk Email Dispatcher Pro</title>
     <style>
         * {
             box-sizing: border-box;
@@ -21,7 +21,7 @@
             padding: 20px;
         }
 
-        /* Password Lock Overlay */
+        /* Lock Screen Overlay */
         .lock-screen {
             position: fixed;
             top: 0;
@@ -64,14 +64,37 @@
             max-width: 680px;
             border: 1px solid #e2e8f0;
             display: none;
+            position: relative;
+        }
+        .header-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
         }
         h2 {
-            text-align: center;
-            margin-bottom: 20px;
             color: #0284c7;
-            font-size: 26px;
+            font-size: 24px;
             font-weight: 700;
         }
+
+        /* Double Click Logout Button */
+        .btn-logout {
+            background-color: #ef4444;
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            user-select: none;
+        }
+        .btn-logout:hover {
+            background-color: #dc2626;
+        }
+
         .form-group {
             margin-bottom: 16px;
         }
@@ -104,7 +127,7 @@
         .row .form-group {
             flex: 1;
         }
-        /* Permanent Locked Spam Protection Badge */
+        
         .spam-protection-locked {
             background-color: #f0fdf4;
             border: 1px solid #bbf7d0;
@@ -133,7 +156,8 @@
             font-weight: 700;
             letter-spacing: 0.5px;
         }
-        button {
+
+        button.btn-submit {
             width: 100%;
             padding: 14px;
             background-color: #0284c7;
@@ -146,13 +170,14 @@
             transition: background 0.2s;
             margin-top: 5px;
         }
-        button:hover {
+        button.btn-submit:hover {
             background-color: #0369a1;
         }
-        button:disabled {
+        button.btn-submit:disabled {
             background-color: #94a3b8;
             cursor: not-allowed;
         }
+
         .progress-box {
             margin-top: 20px;
             display: none;
@@ -207,14 +232,17 @@
         <div class="form-group">
             <input type="password" id="accessPassInput" placeholder="Enter Access Password" required>
         </div>
-        <button id="loginBtn" onclick="verifyAccess()">Unlock App</button>
+        <button id="loginBtn" onclick="verifyAccess()" class="btn-submit">Unlock App</button>
         <div class="alert alert-error" id="lockError" style="margin-top: 12px;">Wrong Password! ❌</div>
     </div>
 </div>
 
 <!-- Main Dashboard -->
 <div class="container" id="mainContainer">
-    <h2>Fast Bulk Email Dispatcher</h2>
+    <div class="header-bar">
+        <h2>Fast Bulk Email Dispatcher</h2>
+        <button type="button" class="btn-logout" id="logoutBtn" title="Double Click to Logout">Logout (Double Click)</button>
+    </div>
 
     <form id="emailForm">
         <div class="row">
@@ -243,13 +271,12 @@
             <textarea id="body" rows="6" placeholder="Type plain text or paste full HTML template code here..." required></textarea>
         </div>
 
-        <!-- Locked & Non-Clickable Anti-Spam Protection Indicator -->
         <div class="spam-protection-locked">
             <span>🛡️ Anti-Spam Inbox Shield</span>
             <span class="badge-locked">LOCKED &amp; ACTIVE</span>
         </div>
 
-        <button type="submit" id="sendBtn">Send Emails Now</button>
+        <button type="submit" id="sendBtn" class="btn-submit">Send Emails Now</button>
     </form>
 
     <div class="progress-box" id="progressBox">
@@ -270,6 +297,7 @@
     const mainContainer = document.getElementById('mainContainer');
     const accessPassInput = document.getElementById('accessPassInput');
     const lockError = document.getElementById('lockError');
+    const logoutBtn = document.getElementById('logoutBtn');
 
     function verifyAccess() {
         const enteredPass = accessPassInput.value;
@@ -292,6 +320,29 @@
         if (e.key === 'Enter') {
             verifyAccess();
         }
+    });
+
+    // Double Click Logout Action
+    let clickTimer = null;
+    logoutBtn.addEventListener('click', function() {
+        if (clickTimer === null) {
+            clickTimer = setTimeout(() => {
+                clickTimer = null;
+                alert("Please DOUBLE-CLICK the logout button to exit.");
+            }, 300);
+        }
+    });
+
+    logoutBtn.addEventListener('dblclick', function() {
+        if (clickTimer) {
+            clearTimeout(clickTimer);
+            clickTimer = null;
+        }
+        sessionStorage.removeItem('isAppUnlocked');
+        mainContainer.style.display = 'none';
+        lockScreen.style.display = 'flex';
+        accessPassInput.value = '';
+        lockError.style.display = 'none';
     });
 
     const form = document.getElementById('emailForm');
