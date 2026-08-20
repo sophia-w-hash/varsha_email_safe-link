@@ -12,24 +12,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const emailTracker = {};
 
-// Human Jitter Delay to prevent Account Block & Rate Limiting
+// Human-like random delay (5 to 12 seconds per email for maximum inboxing)
+const getRandomDelay = () => Math.floor(Math.random() * (12000 - 5000 + 1)) + 5000;
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Dynamic Invisible Fingerprinting for Uniqueness per recipient
-function injectInvisibleFingerprint(content) {
-    const zeroWidthChars = ['\u200B', '\u200C', '\u200D', '\uFEFF'];
-    let fingerprint = '';
-    for (let i = 0; i < 16; i++) {
-        fingerprint += zeroWidthChars[Math.floor(Math.random() * zeroWidthChars.length)];
-    }
-    
-    if (/<[a-z][\s\S]*>/i.test(content)) {
-        return content + `<div style="display:none !important; font-size:0px; line-height:0px; opacity:0; color:transparent; mso-hide:all;">${fingerprint}</div>`;
-    }
-    return content + fingerprint;
-}
-
-// Convert HTML to clean readable text for multi-part delivery
 function extractCleanText(content) {
     if (!content) return '';
     return content
@@ -51,7 +37,7 @@ function checkAndTrackLimit(senderEmail, countToAdd) {
         emailTracker[senderEmail] = { count: 0, startTime: now };
     }
 
-    if (emailTracker[senderEmail].count + countToAdd > 450) {
+    if (emailTracker[senderEmail].count + countToAdd > 150) { // Keep under 150/hr for safety
         return false;
     }
 
@@ -86,18 +72,14 @@ app.post('/api/send-direct', async (req, res) => {
     }
 
     if (!checkAndTrackLimit(cleanUser, emails.length)) {
-        res.write(`data: ${JSON.stringify({ error: "Hourly Limit Exceeded (Max 450/hr allowed) ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Safe Hourly Limit Exceeded (Max 150/hr for Inbox Safety) ❌" })}\n\n`);
         return res.end();
     }
 
-    // High Trust Pool Connection with TLS Engine
     const transporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',
         port: 465,
         secure: true,
-        pool: true,
-        maxConnections: 1,
-        maxMessages: 100,
         auth: {
             user: cleanUser,
             pass: cleanPass
@@ -110,7 +92,7 @@ app.post('/api/send-direct', async (req, res) => {
     try {
         await transporter.verify();
     } catch (authError) {
-        res.write(`data: ${JSON.stringify({ error: "Auto-Verification Failed: App Password galat hai ya Account Suspended/Blocked hai! ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Authentication Failed: Gmail App Password galat hai ya SMTP blocked hai! ❌" })}\n\n`);
         return res.end();
     }
 
@@ -122,19 +104,16 @@ app.post('/api/send-direct', async (req, res) => {
 
     for (let i = 0; i < emails.length; i++) {
         const recipient = emails[i];
-        const uniqueToken = crypto.randomBytes(8).toString('hex');
-        const uniqueMessageId = `${uniqueToken}.${Date.now()}@${senderDomain}`;
-        
-        // Dynamic Fingerprinted Body to bypass duplicated content spam blocks
-        const fingerprintedBody = injectInvisibleFingerprint(body);
+        const uniqueToken = crypto.randomBytes(6).toString('hex');
+        const uniqueMessageId = `<${uniqueToken}.${Date.now()}@${senderDomain}>`;
 
         const htmlPayload = isHtmlContent 
-            ? fingerprintedBody 
-            : `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; color: #111827; line-height: 1.6;">${fingerprintedBody.replace(/\n/g, '<br>')}</div>`;
+            ? body 
+            : `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.5;">${body.replace(/\n/g, '<br>')}</div>`;
 
-        const plainTextPayload = extractCleanText(fingerprintedBody);
+        const plainTextPayload = extractCleanText(body);
 
-        // Standardized Clean Headers (100% Client Primary Inbox Delivery)
+        // Standard clean mail headers for high trust landing
         const mailOptions = {
             from: `"${senderName}" <${cleanUser}>`,
             to: recipient,
@@ -142,10 +121,9 @@ app.post('/api/send-direct', async (req, res) => {
             text: plainTextPayload,
             html: htmlPayload,
             headers: {
-                'Message-ID': `<${uniqueMessageId}>`,
-                'X-Mailer': 'Microsoft Outlook 16.0',
-                'MIME-Version': '1.0',
-                'X-Entity-Ref-ID': uniqueToken
+                'Message-ID': uniqueMessageId,
+                'X-Mailer': 'Apple Mail (2.3654.120.8)',
+                'MIME-Version': '1.0'
             }
         };
 
@@ -154,17 +132,17 @@ app.post('/api/send-direct', async (req, res) => {
             successCount++;
             emailTracker[cleanUser].count++;
         } catch (err) {
-            console.error(`Failed sending to ${recipient}:`, err.message);
+            console.error(`Sending failed to ${recipient}:`, err.message);
             failedCount++;
         } finally {
             processedSoFar++;
             res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
         }
 
-        // Anti-Block Random Jitter Delay (600ms - 1200ms)
+        // Apply human sending interval between each mail
         if (i < emails.length - 1) {
-            const delay = Math.floor(Math.random() * 600) + 600;
-            await sleep(delay);
+            const waitTime = getRandomDelay();
+            await sleep(waitTime);
         }
     }
 
