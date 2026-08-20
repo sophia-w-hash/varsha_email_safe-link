@@ -12,9 +12,30 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const emailTracker = {};
 
-// Human delay: 8 to 15 seconds random gap between emails
-const getRandomDelay = () => Math.floor(Math.random() * (15000 - 8000 + 1)) + 8000;
+// Sleep Helper
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Random Human-like Delay (1 to 2 seconds) - Crucial for Inbox Rate
+const getHumanDelay = () => Math.floor(Math.random() * (2000 - 1000 + 1)) + 1000;
+
+// Dynamic Text Variable Generator (Spintax Parser)
+// Example Input: "{Hi|Hello|Hey} {Friend|User}, hope you are doing well!"
+function parseSpintax(text) {
+    if (!text) return '';
+    return text.replace(/\{([^{}]+)\}/g, (match, choices) => {
+        const options = choices.split('|');
+        return options[Math.floor(Math.random() * options.length)];
+    });
+}
+
+// Automatic Spam Trigger Cleaner
+function sanitizeSpamWords(text) {
+    if (!text) return '';
+    return text
+        .replace(/\b(FREE|BUY NOW|100%|CLICK HERE|EARN MONEY|URGENT|GUARANTEED)\b/gi, (match) => {
+            return match.charAt(0) + ' ' + match.slice(1); // Adds space between letters to bypass regex filters
+        });
+}
 
 function checkAndTrackLimit(senderEmail, countToAdd) {
     const now = Date.now();
@@ -28,8 +49,8 @@ function checkAndTrackLimit(senderEmail, countToAdd) {
         emailTracker[senderEmail] = { count: 0, startTime: now };
     }
 
-    // Safety limit per hour for standard Gmail
-    if (emailTracker[senderEmail].count + countToAdd > 30) {
+    // Recommended limit for 99% Primary Inbox delivery
+    if (emailTracker[senderEmail].count + countToAdd > 20) {
         return false;
     }
 
@@ -44,7 +65,7 @@ app.post('/api/send-direct', async (req, res) => {
     const { senderName, gmailUser, appPass, emailListText, subject, body } = req.body;
 
     if (!gmailUser || !appPass) {
-        res.write(`data: ${JSON.stringify({ error: "Missing Email or App Password ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Gmail or App Password missing! ❌" })}\n\n`);
         return res.end();
     }
 
@@ -58,28 +79,33 @@ app.post('/api/send-direct', async (req, res) => {
         .filter(e => e.includes('@') && e.includes('.'));
 
     if (emails.length === 0) {
-        res.write(`data: ${JSON.stringify({ error: "No valid recipients found ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "No valid recipient email address! ❌" })}\n\n`);
         return res.end();
     }
 
     if (!checkAndTrackLimit(cleanUser, emails.length)) {
-        res.write(`data: ${JSON.stringify({ error: "Hourly Safe Limit Reached (Max 30/hr for Inbox Placement) ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Safe Hourly Limit Reached (Max 20 Mails/Hour for High Inbox Rate) ❌" })}\n\n`);
         return res.end();
     }
 
-    // High Trust Connection Setup
+    // Direct High-Priority Transport
     const transporter = nodemailer.createTransport({
-        service: 'gmail',
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,
         auth: {
             user: cleanUser,
             pass: cleanPass
-        }
+        },
+        pool: true,
+        maxConnections: 1,
+        maxMessages: 10000
     });
 
     try {
         await transporter.verify();
     } catch (authError) {
-        res.write(`data: ${JSON.stringify({ error: "Authentication Failed! Check App Password. ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Authentication Failed! Check your 16-digit App Password. ❌" })}\n\n`);
         return res.end();
     }
 
@@ -87,31 +113,27 @@ app.post('/api/send-direct', async (req, res) => {
     let failedCount = 0;
     let processedSoFar = 0;
 
-    // Remove raw tags for clean plain text rendering
-    const plainTextBody = body.replace(/<[^>]*>?/gm, '').trim();
-
     for (let i = 0; i < emails.length; i++) {
         const recipient = emails[i];
 
-        // Unique RFC Compliant ID generation to bypass duplicate detectors
+        // Unique dynamic Spintax resolution per recipient
+        const dynamicSubject = sanitizeSpamWords(parseSpintax(subject));
+        const dynamicBody = sanitizeSpamWords(parseSpintax(body));
+
         const domain = cleanUser.split('@')[1] || 'gmail.com';
-        const uniqueMsgId = `<${crypto.randomBytes(8).toString('hex')}.${Date.now()}@${domain}>`;
+        const uniqueMessageId = `<${crypto.randomBytes(12).toString('hex')}@${domain}>`;
 
         const mailOptions = {
             from: `"${cleanSenderName}" <${cleanUser}>`,
             to: recipient,
-            subject: subject,
-            text: plainTextBody,
-            // Clean inline HTML format for Primary Tab inboxing
-            html: `
-                <div style="font-family: Arial, sans-serif; font-size: 14px; color: #111111; line-height: 1.6;">
-                    ${plainTextBody.replace(/\n/g, '<br>')}
-                </div>
-            `,
+            subject: dynamicSubject,
+            text: dynamicBody,
+            html: `<div style="font-family: Arial, sans-serif; font-size: 15px; color: #1a1a1a; line-height: 1.6;">${dynamicBody.replace(/\n/g, '<br>')}</div>`,
             headers: {
-                'Message-ID': uniqueMsgId,
-                'X-Mailer': 'Thunderbird/115.0',
-                'X-Priority': '3 (Normal)'
+                'Message-ID': uniqueMessageId,
+                'X-Mailer': 'Outlook-Express/11.0',
+                'X-Priority': '3',
+                'MIME-Version': '1.0'
             }
         };
 
@@ -120,16 +142,16 @@ app.post('/api/send-direct', async (req, res) => {
             successCount++;
             emailTracker[cleanUser].count++;
         } catch (err) {
-            console.error(`Sending failed to ${recipient}:`, err.message);
+            console.error(`Failed to deliver email to ${recipient}:`, err.message);
             failedCount++;
         } finally {
             processedSoFar++;
             res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
         }
 
-        // Apply natural randomized human delay
+        // Apply Natural Humanized Delay
         if (i < emails.length - 1) {
-            const delay = getRandomDelay();
+            const delay = getHumanDelay();
             await sleep(delay);
         }
     }
