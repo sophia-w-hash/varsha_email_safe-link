@@ -16,7 +16,7 @@ app.post('/api/send-direct', async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    const { gmailUser, appPass, emailListText, subject, body } = req.body;
+    const { senderName, gmailUser, appPass, subject, body, emailListText } = req.body;
 
     if (!gmailUser || !appPass) {
         res.write(`data: ${JSON.stringify({ error: "Gmail Address ya App Password missing hai! ❌" })}\n\n`);
@@ -25,6 +25,7 @@ app.post('/api/send-direct', async (req, res) => {
 
     const cleanUser = gmailUser.trim().toLowerCase();
     const cleanPass = appPass.replace(/\s+/g, '');
+    const cleanSenderName = senderName ? senderName.trim() : cleanUser.split('@')[0];
 
     const emails = emailListText
         .split(/[\n,\s]+/)
@@ -36,7 +37,6 @@ app.post('/api/send-direct', async (req, res) => {
         return res.end();
     }
 
-    // Standard Direct SMTP Connection
     const transporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',
         port: 465,
@@ -50,7 +50,7 @@ app.post('/api/send-direct', async (req, res) => {
     try {
         await transporter.verify();
     } catch (authError) {
-        res.write(`data: ${JSON.stringify({ error: "Authentication Failed! App Password re-check karein. ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Authentication Failed! App Password check karein. ❌" })}\n\n`);
         return res.end();
     }
 
@@ -58,14 +58,14 @@ app.post('/api/send-direct', async (req, res) => {
     let failedCount = 0;
     let processedSoFar = 0;
 
-    // Remove any HTML tags to keep body pure text
+    // Strict sanitization: Strip HTML to avoid spam trigger flags
     const cleanBodyText = body.replace(/<[^>]*>?/gm, '').trim();
 
     for (let i = 0; i < emails.length; i++) {
         const recipient = emails[i];
 
         const mailOptions = {
-            from: cleanUser,
+            from: `"${cleanSenderName}" <${cleanUser}>`,
             to: recipient,
             subject: subject,
             text: cleanBodyText
@@ -82,7 +82,7 @@ app.post('/api/send-direct', async (req, res) => {
             res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
         }
 
-        // 8 Seconds delay between each mail to avoid Gmail rate-limiting
+        // Safe human delay (8 seconds gap)
         if (i < emails.length - 1) {
             await sleep(8000);
         }
