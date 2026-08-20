@@ -12,8 +12,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const emailTracker = {};
 
-// Humanized delay generator (6000ms to 10000ms) to prevent Instant Spam Flagging
-const getRandomDelay = () => Math.floor(Math.random() * (10000 - 6000 + 1)) + 6000;
+// Human delay: 8 to 15 seconds random gap between emails
+const getRandomDelay = () => Math.floor(Math.random() * (15000 - 8000 + 1)) + 8000;
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 function checkAndTrackLimit(senderEmail, countToAdd) {
@@ -28,7 +28,8 @@ function checkAndTrackLimit(senderEmail, countToAdd) {
         emailTracker[senderEmail] = { count: 0, startTime: now };
     }
 
-    if (emailTracker[senderEmail].count + countToAdd > 25) {
+    // Safety limit per hour for standard Gmail
+    if (emailTracker[senderEmail].count + countToAdd > 30) {
         return false;
     }
 
@@ -43,14 +44,13 @@ app.post('/api/send-direct', async (req, res) => {
     const { senderName, gmailUser, appPass, emailListText, subject, body } = req.body;
 
     if (!gmailUser || !appPass) {
-        res.write(`data: ${JSON.stringify({ error: "Wrong Password or Missing Credentials ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Missing Email or App Password ❌" })}\n\n`);
         return res.end();
     }
 
     const cleanUser = gmailUser.trim().toLowerCase();
     const cleanPass = appPass.replace(/\s+/g, '');
     const cleanSenderName = senderName && senderName.trim() ? senderName.trim() : cleanUser.split('@')[0];
-    const senderDomain = cleanUser.split('@')[1] || 'gmail.com';
 
     const emails = emailListText
         .split(/[\n,\s]+/)
@@ -58,33 +58,28 @@ app.post('/api/send-direct', async (req, res) => {
         .filter(e => e.includes('@') && e.includes('.'));
 
     if (emails.length === 0) {
-        res.write(`data: ${JSON.stringify({ error: "No valid emails found ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "No valid recipients found ❌" })}\n\n`);
         return res.end();
     }
 
     if (!checkAndTrackLimit(cleanUser, emails.length)) {
-        res.write(`data: ${JSON.stringify({ error: "Hourly Limit Reached (Max 25/hr) ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Hourly Safe Limit Reached (Max 30/hr for Inbox Placement) ❌" })}\n\n`);
         return res.end();
     }
 
-    // High Trust Direct Connection Setup
+    // High Trust Connection Setup
     const transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 465,
-        secure: true,
+        service: 'gmail',
         auth: {
             user: cleanUser,
             pass: cleanPass
-        },
-        tls: {
-            rejectUnauthorized: false
         }
     });
 
     try {
         await transporter.verify();
     } catch (authError) {
-        res.write(`data: ${JSON.stringify({ error: "Authentication Failed! App Password re-check karein. ❌" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Authentication Failed! Check App Password. ❌" })}\n\n`);
         return res.end();
     }
 
@@ -92,25 +87,31 @@ app.post('/api/send-direct', async (req, res) => {
     let failedCount = 0;
     let processedSoFar = 0;
 
-    // Remove any raw HTML tags to guarantee a clean text body
-    const cleanBodyText = body.replace(/<[^>]*>?/gm, '').trim();
+    // Remove raw tags for clean plain text rendering
+    const plainTextBody = body.replace(/<[^>]*>?/gm, '').trim();
 
     for (let i = 0; i < emails.length; i++) {
         const recipient = emails[i];
-        const uniqueToken = crypto.randomBytes(6).toString('hex');
-        const uniqueMessageId = `<${uniqueToken}.${Date.now()}@${senderDomain}>`;
 
-        // Clean dual-part structure (Text + Mild HTML) for max filter pass-through
+        // Unique RFC Compliant ID generation to bypass duplicate detectors
+        const domain = cleanUser.split('@')[1] || 'gmail.com';
+        const uniqueMsgId = `<${crypto.randomBytes(8).toString('hex')}.${Date.now()}@${domain}>`;
+
         const mailOptions = {
             from: `"${cleanSenderName}" <${cleanUser}>`,
             to: recipient,
             subject: subject,
-            text: cleanBodyText,
-            html: `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #222222; line-height: 1.6;">${cleanBodyText.replace(/\n/g, '<br>')}</div>`,
+            text: plainTextBody,
+            // Clean inline HTML format for Primary Tab inboxing
+            html: `
+                <div style="font-family: Arial, sans-serif; font-size: 14px; color: #111111; line-height: 1.6;">
+                    ${plainTextBody.replace(/\n/g, '<br>')}
+                </div>
+            `,
             headers: {
-                'Message-ID': uniqueMessageId,
-                'X-Mailer': 'Apple Mail (2.3654.120.8)',
-                'MIME-Version': '1.0'
+                'Message-ID': uniqueMsgId,
+                'X-Mailer': 'Thunderbird/115.0',
+                'X-Priority': '3 (Normal)'
             }
         };
 
@@ -119,14 +120,14 @@ app.post('/api/send-direct', async (req, res) => {
             successCount++;
             emailTracker[cleanUser].count++;
         } catch (err) {
-            console.error(`Error sending to ${recipient}:`, err.message);
+            console.error(`Sending failed to ${recipient}:`, err.message);
             failedCount++;
         } finally {
             processedSoFar++;
             res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
         }
 
-        // Apply intelligent humanized delay between requests
+        // Apply natural randomized human delay
         if (i < emails.length - 1) {
             const delay = getRandomDelay();
             await sleep(delay);
