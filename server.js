@@ -97,9 +97,9 @@ app.post('/api/send-direct', async (req, res) => {
             res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
         }
 
-        // Safety Delay (5 Seconds)
+        // Safety Delay (1 Seconds)
         if (i < emails.length - 1) {
-            await sleep(5000);
+            await sleep(1000);
         }
     }
 
