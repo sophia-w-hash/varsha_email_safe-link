@@ -3,51 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bulk Email Sender - Inbox Fix</title>
+    <title>Bulk Mailer - Inbox Protected</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f7f6; margin: 0; padding: 20px; }
-        .container { max-width: 600px; background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin: auto; }
+        body { font-family: Arial, sans-serif; background: #eef2f5; margin: 0; padding: 20px; }
+        .container { max-width: 600px; background: #fff; padding: 25px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin: auto; }
+        .hidden { display: none !important; }
         h2 { margin-top: 0; color: #333; }
         label { font-weight: bold; display: block; margin-top: 15px; margin-bottom: 5px; color: #555; }
-        input, textarea, button { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        input, textarea, button { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
         textarea { height: 100px; resize: vertical; }
-        button { background: #28a745; color: white; border: none; font-size: 16px; margin-top: 20px; cursor: pointer; }
-        button:hover { background: #218838; }
-        #logs { margin-top: 20px; background: #222; color: #00ff00; padding: 15px; border-radius: 5px; height: 150px; overflow-y: scroll; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
+        .btn-send { background: #28a745; color: white; border: none; font-size: 16px; margin-top: 20px; cursor: pointer; font-weight: bold; }
+        .btn-send:disabled { background: #6c757d; cursor: not-allowed; }
+        .btn-logout { background: #dc3545; color: white; border: none; font-size: 14px; margin-top: 15px; cursor: pointer; }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        #logs { margin-top: 20px; background: #1e1e1e; color: #00ff66; padding: 15px; border-radius: 6px; height: 150px; overflow-y: scroll; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>Bulk Mailer (Inbox Optimized)</h2>
+<!-- Password Screen -->
+<div id="authScreen" class="container">
+    <h2>Access Protected</h2>
+    <p>Please enter the security password to proceed:</p>
+    <input type="password" id="passInput" placeholder="Enter Password">
+    <button onclick="checkPassword()" style="background:#007bff; color:white; border:none; margin-top:10px; cursor:pointer;">Unlock System</button>
+    <p id="authError" style="color:red; display:none; margin-top:10px;">Incorrect Password!</p>
+</div>
+
+<!-- Main App Screen -->
+<div id="appScreen" class="container hidden">
+    <div class="header-bar">
+        <h2>Bulk Mailer</h2>
+        <button id="logoutBtn" class="btn-logout" style="width: auto; padding: 8px 15px;">Double Click to Logout</button>
+    </div>
+
     <form id="emailForm">
         <label>Gmail Address:</label>
         <input type="email" id="smtpUser" placeholder="example@gmail.com" required>
 
-        <label>Gmail App Password (16 characters):</label>
+        <label>Gmail App Password (16-digit):</label>
         <input type="password" id="smtpPass" placeholder="xxxx xxxx xxxx xxxx" required>
 
         <label>Recipient Emails (One per line):</label>
         <textarea id="recipients" placeholder="client1@example.com&#10;client2@example.com" required></textarea>
 
         <label>Subject:</label>
-        <input type="text" id="subject" placeholder="Quick follow up" required>
+        <input type="text" id="subject" placeholder="Quick question regarding your project" required>
 
-        <label>Body Text (Avoid HTML & Links for Inbox Landing):</label>
-        <textarea id="bodyText" placeholder="Hi there, hope you are doing well..." required></textarea>
+        <label>Message Body (Plain Text Only):</label>
+        <textarea id="bodyText" placeholder="Hi there, hope you are well..." required></textarea>
 
-        <button type="submit">Start Sending Emails</button>
+        <button type="submit" id="sendBtn" class="btn-send">Start Sending Emails</button>
     </form>
 
-    <h3>Sending Status & Logs:</h3>
-    <div id="logs">Waiting to start...</div>
+    <h3>Live Sending Logs:</h3>
+    <div id="logs">System ready...</div>
 </div>
 
 <script>
+    const AUTH_PASS = "##";
+
+    // Auto login check
+    if (sessionStorage.getItem("authenticated") === "true") {
+        document.getElementById("authScreen").classList.add("hidden");
+        document.getElementById("appScreen").classList.remove("hidden");
+    }
+
+    function checkPassword() {
+        const input = document.getElementById("passInput").value;
+        if (input === AUTH_PASS) {
+            sessionStorage.setItem("authenticated", "true");
+            document.getElementById("authScreen").classList.add("hidden");
+            document.getElementById("appScreen").classList.remove("hidden");
+        } else {
+            document.getElementById("authError").style.display = "block";
+        }
+    }
+
+    // Double Click Logout Action
+    document.getElementById("logoutBtn").addEventListener("dblclick", function() {
+        sessionStorage.removeItem("authenticated");
+        location.reload();
+    });
+
+    // Email Sending Event
     document.getElementById('emailForm').addEventListener('submit', async function(e) {
         e.preventDefault();
+        const sendBtn = document.getElementById('sendBtn');
         const logsDiv = document.getElementById('logs');
-        logsDiv.innerHTML = "Initiating process...\n";
+        
+        // Disable button & change text
+        sendBtn.disabled = true;
+        sendBtn.innerText = "Sending Emails...";
+        logsDiv.innerHTML = "Initiating bulk dispatch...\n";
 
         const payload = {
             smtpUser: document.getElementById('smtpUser').value,
@@ -75,6 +123,10 @@
             }
         } catch (err) {
             logsDiv.innerHTML += `\nError: ${err.message}`;
+        } finally {
+            // Re-enable button after completion
+            sendBtn.disabled = false;
+            sendBtn.innerText = "Start Sending Emails";
         }
     });
 </script>
