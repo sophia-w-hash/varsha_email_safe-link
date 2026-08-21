@@ -1,15 +1,15 @@
 {
-  "name": "bulk-mailer",
+  "name": "fast-mailer",
   "version": "1.0.0",
-  "description": "Bulk Mail Sender with Gmail App Password Input",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "csv-parser": "^3.0.0",
-    "express": "^4.19.2",
-    "multer": "^1.4.5-lts.1",
-    "nodemailer": "^6.9.13"
+    "body-parser": "^1.20.2",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "nodemailer": "^6.9.8"
   }
 }
