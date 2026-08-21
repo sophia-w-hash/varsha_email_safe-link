@@ -1,117 +1,118 @@
-const express = require('express');
+const express    = require('express');
+const session    = require('express-session');
+const bodyParser = require('body-parser');
 const nodemailer = require('nodemailer');
-const path = require('path');
-const crypto = require('crypto');
+const path       = require('path');
+require('dotenv').config();
 
-const app = express();
+const app  = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.set('trust proxy', 1);
+
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
+
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'fast-mailer-clean-core-2026',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 1000 * 60 * 60 * 12
+  }
+}));
+
 app.use(express.static(path.join(__dirname, 'public')));
 
-const emailTracker = {};
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+// Persistent Single Transporter Pool (Clean Socket Reuse)
+const transporterCache = {};
 
-function checkAndTrackLimit(senderEmail, countToAdd) {
-    const now = Date.now();
-    const ONE_HOUR = 3600000;
-
-    if (!emailTracker[senderEmail]) {
-        emailTracker[senderEmail] = { count: 0, startTime: now };
-    }
-
-    if (now - emailTracker[senderEmail].startTime > ONE_HOUR) {
-        emailTracker[senderEmail] = { count: 0, startTime: now };
-    }
-
-    if (emailTracker[senderEmail].count + countToAdd > 25) {
-        return false;
-    }
-
-    return true;
+function getTransporter(gmailId, appPassword) {
+  const cacheKey = `${gmailId}:${appPassword}`;
+  if (!transporterCache[cacheKey]) {
+    transporterCache[cacheKey] = nodemailer.createTransport({
+      service: 'gmail',
+      pool: true,
+      maxConnections: 3,
+      maxMessages: 100,
+      auth: { user: gmailId, pass: appPassword }
+    });
+  }
+  return transporterCache[cacheKey];
 }
 
-app.post('/api/send-direct', async (req, res) => {
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
+function requireLogin(req, res, next) {
+  if (req.session?.loggedIn) return next();
+  res.redirect('/');
+}
 
-    const { gmailUser, appPass, emailListText, subject, body } = req.body;
+// Page Routes
+app.get('/', (req, res) => {
+  if (req.session?.loggedIn) return res.redirect('/launcher');
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
 
-    if (!gmailUser || !appPass) {
-        res.write(`data: ${JSON.stringify({ error: "Wrong Password ❌" })}\n\n`);
-        return res.end();
-    }
+app.get('/launcher', requireLogin, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'launcher.html'));
+});
 
-    const cleanUser = gmailUser.trim().toLowerCase();
-    const cleanPass = appPass.replace(/\s+/g, '');
-    const displayName = cleanUser.split('@')[0];
+// Auth Handlers
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  const validUser = process.env.ADMIN_USER || 'rrrr';
+  const validPass = process.env.ADMIN_PASS || 'rrrr';
+  
+  if (username === validUser && password === validPass) {
+    req.session.loggedIn = true;
+    return req.session.save((err) => {
+      if (err) return res.status(500).json({ success: false, message: 'Session error' });
+      res.json({ success: true });
+    });
+  }
+  res.status(401).json({ success: false, message: 'Invalid credentials' });
+});
 
-    const emails = emailListText
-        .split(/[\n,\s]+/)
-        .map(e => e.trim())
-        .filter(e => e.includes('@') && e.includes('.'));
+app.post('/logout', (req, res) => {
+  req.session.destroy(() => {
+    res.clearCookie('connect.sid');
+    res.json({ success: true });
+  });
+});
 
-    if (emails.length === 0) {
-        res.write(`data: ${JSON.stringify({ error: "No valid emails found ❌" })}\n\n`);
-        return res.end();
-    }
+// Pure 1-by-1 Native Dispatcher (Zero Fake Headers, Direct Primary Inbox Delivery)
+app.post('/api/send-email', requireLogin, async (req, res) => {
+  const { senderName, gmailId, appPassword, subject, messageBody, to } = req.body;
 
-    if (!checkAndTrackLimit(cleanUser, emails.length)) {
-        res.write(`data: ${JSON.stringify({ error: "Mail Limit Full ❌" })}\n\n`);
-        return res.end();
-    }
+  if (!gmailId || !appPassword || !to || !messageBody) {
+    return res.status(400).json({ success: false, message: 'Missing fields' });
+  }
 
-    const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: cleanUser,
-            pass: cleanPass
-        }
+  const cleanGmailId  = gmailId.trim();
+  const cleanPassword = appPassword.replace(/\s+/g, '');
+  const cleanTo       = to.trim();
+
+  try {
+    const transporter = getTransporter(cleanGmailId, cleanPassword);
+
+    const fromFormatted = senderName && senderName.trim()
+      ? `"${senderName.trim()}" <${cleanGmailId}>`
+      : cleanGmailId;
+
+    const info = await transporter.sendMail({
+      from: fromFormatted,
+      to: cleanTo,
+      subject: subject ? subject.trim() : '',
+      text: messageBody.trim()
     });
 
-    try {
-        await transporter.verify();
-    } catch (authError) {
-        res.write(`data: ${JSON.stringify({ error: "Wrong Password ❌" })}\n\n`);
-        return res.end();
-    }
-
-    let successCount = 0;
-    let failedCount = 0;
-    let processedSoFar = 0;
-
-    for (let i = 0; i < emails.length; i++) {
-        const recipient = emails[i];
-
-        // Clean authentic mail payload
-        const mailOptions = {
-            from: `"${displayName}" <${cleanUser}>`,
-            to: recipient,
-            subject: subject,
-            text: body
-        };
-
-        try {
-            await transporter.sendMail(mailOptions);
-            successCount++;
-            emailTracker[cleanUser].count++;
-        } catch (err) {
-            failedCount++;
-        }
-
-        processedSoFar++;
-
-        res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
-
-        await sleep(10);
-    }
-
-    res.write(`data: ${JSON.stringify({ completed: true, total: emails.length, delivered: successCount, failed: failedCount })}\n\n`);
-    res.end();
+    res.json({ success: true, messageId: info.messageId });
+  } catch (err) {
+    console.error(`❌ Delivery error for ${cleanTo}:`, err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Fast Mailer running cleanly on port ${PORT}`));
