@@ -11,10 +11,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Speed: 1 to 2 Seconds Delay
-const getFastDelay = () => Math.floor(Math.random() * (2000 - 1000 + 1)) + 1000;
+// Fast Speed Limit (1 to 1.5 seconds) - Maximum allowable for Gmail SMTP
+const getFastDelay = () => Math.floor(Math.random() * (1500 - 1000 + 1)) + 1000;
 
-// Dynamic Spintax Parser
 function parseSpintax(text) {
     if (!text) return '';
     return text.replace(/\{([^{}]+)\}/g, (match, choices) => {
@@ -49,11 +48,14 @@ app.post('/api/send-direct', async (req, res) => {
         return res.end();
     }
 
-    // Optimized Single-Connection Transport for High-Speed Delivery
+    // High-Performance Transporter with SMTP Pooling
     const transporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',
         port: 465,
         secure: true,
+        pool: true,
+        maxConnections: 1,
+        maxMessages: 50,
         auth: {
             user: cleanUser,
             pass: cleanPass
@@ -73,25 +75,21 @@ app.post('/api/send-direct', async (req, res) => {
     for (let i = 0; i < emails.length; i++) {
         const recipient = emails[i];
 
-        // Unique dynamic content per recipient
         const dynamicSubject = parseSpintax(subject);
         const dynamicBody = parseSpintax(body);
 
-        // Generate Human-like RFC Compliant Message-ID
         const domain = cleanUser.split('@')[1] || 'gmail.com';
         const uniqueMsgId = `<${crypto.randomBytes(8).toString('hex')}.${Date.now()}@${domain}>`;
 
-        // HIGH-TRUST PLAIN TEXT CONFIGURATION
         const mailOptions = {
             from: `"${cleanSenderName}" <${cleanUser}>`,
             to: recipient,
             replyTo: cleanUser,
             subject: dynamicSubject,
-            text: dynamicBody, // Pure Plain Text (No HTML)
+            text: dynamicBody, // Pure Plain Text
             headers: {
                 'Message-ID': uniqueMsgId,
-                'X-Mailer': 'iPhone Mail (20G81)', // Emulate iPhone Client
-                'X-Priority': '3',
+                'X-Mailer': 'Apple Mail (2.3654.120.8)',
                 'MIME-Version': '1.0'
             }
         };
@@ -106,7 +104,6 @@ app.post('/api/send-direct', async (req, res) => {
 
         res.write(`data: ${JSON.stringify({ progress: true, sent: i + 1, total: emails.length })}\n\n`);
 
-        // 1 to 2 Seconds Speed Delay
         if (i < emails.length - 1) {
             await sleep(getFastDelay());
         }
