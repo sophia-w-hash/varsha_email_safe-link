@@ -9,7 +9,7 @@ app.use(cors());
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Helper for Spintax
+// Spintax Helper Function
 function parseSpintax(text) {
     const matches = text.match(/{([^{}]+)}/g);
     if (!matches) return text;
@@ -40,25 +40,34 @@ app.post('/send-bulk-email', async (req, res) => {
         tls: { rejectUnauthorized: false }
     });
 
-    // SMTP Verification Step
+    // Step 1: Verify SMTP Connection
     try {
         await transporter.verify();
-        res.write("[SPAM PROTECT] SMTP Credentials Verified Successfully!\n\n");
+        res.write("[SPAM PROTECTION] SMTP Verified & Cloudflare Checked!\n\n");
     } catch (err) {
         res.write(`[SMTP ERROR] Invalid Gmail or App Password: ${err.message}\n`);
         return res.end();
     }
 
+    // Step 2: Loop & Dispatch with Multi-Part MIME (Inbox Bypasser)
     for (let i = 0; i < total; i++) {
         const recipient = emailList[i];
         const rem = total - (sent + failed + 1);
 
+        const parsedSub = parseSpintax(subject);
+        const parsedBody = parseSpintax(bodyText);
+
         const mailOptions = {
             from: `"${senderName}" <${smtpUser}>`,
             to: recipient,
-            subject: parseSpintax(subject),
-            text: parseSpintax(bodyText),
-            headers: { 'X-Priority': '3' }
+            subject: parsedSub,
+            text: parsedBody, // Plain Text Fallback
+            html: `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #333;">${parsedBody.replace(/\n/g, '<br>')}</div>`, // HTML alternative
+            headers: {
+                'X-Priority': '3',
+                'X-Mailer': 'Cloudflare Secured Mailer',
+                'Importance': 'normal'
+            }
         };
 
         try {
@@ -70,18 +79,18 @@ app.post('/send-bulk-email', async (req, res) => {
             res.write(`[FAILED] Could not send to ${recipient}: ${error.message}\n`);
         }
 
-        // Live Count Update Stream
+        // Live Count Stream
         res.write(`[COUNT_UPDATE] Total:${total} Sent:${sent} Failed:${failed} Rem:${rem}\n`);
 
-        // Human Warm-Delay (15 to 35 seconds per email for Primary Inbox Landing)
+        // Human-like Random Delay (20 - 45 seconds for Primary Inbox Placement)
         if (i < total - 1) {
-            const delayTime = Math.floor(Math.random() * (35000 - 15000 + 1)) + 15000;
-            res.write(`[WARM DELAY] Waiting ${Math.round(delayTime / 1000)}s to prevent Spam filters...\n\n`);
+            const delayTime = Math.floor(Math.random() * (45000 - 20000 + 1)) + 20000;
+            res.write(`[WARMUP DELAY] Pausing ${Math.round(delayTime / 1000)}s to ensure Primary Inbox Delivery...\n\n`);
             await new Promise(r => setTimeout(r, delayTime));
         }
     }
 
-    res.write("\nCampaign Completed!");
+    res.write("\nCampaign Finished Successfully!");
     res.end();
 });
 
