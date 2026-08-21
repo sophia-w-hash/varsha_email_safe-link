@@ -7,11 +7,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Serve static frontend files
 app.use(express.static(path.join(__dirname, 'public')));
-
-// Helper: Random Delay Generator (Anti-Spam Throttling)
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 app.post('/send-bulk-email', async (req, res) => {
     const { smtpUser, smtpPass, recipients, subject, bodyText } = req.body;
@@ -20,7 +16,6 @@ app.post('/send-bulk-email', async (req, res) => {
         return res.status(400).json({ error: "All fields are required!" });
     }
 
-    // Convert recipient string to array
     const emailList = recipients
         .split('\n')
         .map(e => e.trim())
@@ -30,57 +25,59 @@ app.post('/send-bulk-email', async (req, res) => {
         return res.status(400).json({ error: "No valid email recipients provided." });
     }
 
-    // Optimized Nodemailer Transport for Gmail/SMTP
+    // High Speed Connection Pool Setup
     const transporter = nodemailer.createTransport({
         service: 'gmail',
+        pool: true,             // Keeps SMTP connection open for speed
+        maxConnections: 5,      // Sends up to 5 connections concurrently
+        maxMessages: 100,
         auth: {
             user: smtpUser,
-            pass: smtpPass // Must be a 16-character App Password
+            pass: smtpPass      // Must be a 16-character App Password
         },
         tls: {
             rejectUnauthorized: false
         }
     });
 
-    res.write("Starting bulk email dispatch with Inbox Optimization...\n\n");
+    res.write(`Starting speed dispatch for ${emailList.length} emails...\n\n`);
 
-    for (let i = 0; i < emailList.length; i++) {
-        const recipient = emailList[i];
+    // Batch Processing: 6 Mails Per Batch
+    const BATCH_SIZE = 6;
+    for (let i = 0; i < emailList.length; i += BATCH_SIZE) {
+        const batch = emailList.slice(i, i + BATCH_SIZE);
         
-        const mailOptions = {
-            from: `"Support" <${smtpUser}>`,
-            to: recipient,
-            subject: subject,
-            text: bodyText, // Plain text is safest for inbox placement
-            headers: {
-                'X-Mailer': 'NodeMailer Bulk Sender',
-                'X-Priority': '3',
-                'Precedence': 'bulk'
-            }
-        };
+        const sendPromises = batch.map((recipient) => {
+            const mailOptions = {
+                from: `"Support" <${smtpUser}>`,
+                to: recipient,
+                subject: subject,
+                text: bodyText, // Plain text avoids spam trigger
+                headers: {
+                    'X-Mailer': 'NodeMailer Speed Sender',
+                    'X-Priority': '3',
+                    'Precedence': 'bulk'
+                }
+            };
+            return transporter.sendMail(mailOptions)
+                .then(() => `[SUCCESS] Email sent to: ${recipient}`)
+                .catch((err) => `[FAILED] Could not send to ${recipient}: ${err.message}`);
+        });
 
-        try {
-            await transporter.sendMail(mailOptions);
-            res.write(`[SUCCESS] Email sent to: ${recipient}\n`);
-            console.log(`Email sent to ${recipient}`);
-        } catch (error) {
-            res.write(`[FAILED] Could not send to ${recipient}: ${error.message}\n`);
-            console.error(`Error sending to ${recipient}:`, error);
-        }
+        // Parallel Execution for speed
+        const results = await Promise.all(sendPromises);
+        results.forEach(resMsg => res.write(resMsg + '\n'));
 
-        // Wait between 30 to 60 seconds before sending the next email (Except the last one)
-        if (i < emailList.length - 1) {
-            const waitTime = Math.floor(Math.random() * (60000 - 30000 + 1)) + 30000;
-            res.write(`[WAITING] Cooldown for ${Math.round(waitTime / 1000)}s to prevent spam flags...\n\n`);
-            await delay(waitTime);
+        // Short 1-second delay between batches to reduce instant block risk
+        if (i + BATCH_SIZE < emailList.length) {
+            await new Promise(r => setTimeout(r, 1000));
         }
     }
 
-    res.write("\nCampaign Completed Successfully!");
+    transporter.close();
+    res.write("\nAll Emails Dispatched!");
     res.end();
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
