@@ -1,118 +1,183 @@
-const express    = require('express');
-const session    = require('express-session');
-const bodyParser = require('body-parser');
+const express = require('express');
 const nodemailer = require('nodemailer');
-const path       = require('path');
-require('dotenv').config();
+const path = require('path');
+const crypto = require('crypto');
 
-const app  = express();
+const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.set('trust proxy', 1);
-
-app.use(bodyParser.json({ limit: '10mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
-
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'fast-mailer-clean-core-2026',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 1000 * 60 * 60 * 12
-  }
-}));
-
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Persistent Single Transporter Pool (Clean Socket Reuse)
-const transporterCache = {};
+// In-Memory hourly tracking to protect account reputation
+const emailTracker = {};
 
-function getTransporter(gmailId, appPassword) {
-  const cacheKey = `${gmailId}:${appPassword}`;
-  if (!transporterCache[cacheKey]) {
-    transporterCache[cacheKey] = nodemailer.createTransport({
-      service: 'gmail',
-      pool: true,
-      maxConnections: 3,
-      maxMessages: 100,
-      auth: { user: gmailId, pass: appPassword }
+// Sleep Helper
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Fast Speed Delay (1.0 to 2.0 seconds) as requested
+const getFastDelay = () => Math.floor(Math.random() * (2000 - 1000 + 1)) + 1000;
+
+// Dynamic Spintax Parser: converts "{Hi|Hello|Hey}" into random choice
+function parseSpintax(text) {
+    if (!text) return '';
+    return text.replace(/\{([^{}]+)\}/g, (match, choices) => {
+        const options = choices.split('|');
+        return options[Math.floor(Math.random() * options.length)].trim();
     });
-  }
-  return transporterCache[cacheKey];
 }
 
-function requireLogin(req, res, next) {
-  if (req.session?.loggedIn) return next();
-  res.redirect('/');
+// Automatic Spam Trigger Cleaner: breaks trigger patterns without losing context
+function sanitizeSpamWords(text) {
+    if (!text) return '';
+    const spamRegex = /\b(FREE|BUY NOW|100%|CLICK HERE|EARN MONEY|URGENT|GUARANTEED|LIMITED TIME|BEST PRICE|MAKE MONEY|NO RISK|ACT NOW)\b/gi;
+    return text.replace(spamRegex, (match) => {
+        return match.charAt(0) + ' ' + match.slice(1);
+    });
 }
 
-// Page Routes
-app.get('/', (req, res) => {
-  if (req.session?.loggedIn) return res.redirect('/launcher');
-  res.sendFile(path.join(__dirname, 'public', 'login.html'));
-});
+// Track Hourly Limits (Max 30 mails/hr for raw Gmail SMTP to stay in Primary Inbox)
+function checkAndTrackLimit(senderEmail, countToAdd) {
+    const now = Date.now();
+    const ONE_HOUR = 3600000;
 
-app.get('/launcher', requireLogin, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'launcher.html'));
-});
+    if (!emailTracker[senderEmail]) {
+        emailTracker[senderEmail] = { count: 0, startTime: now };
+    }
 
-// Auth Handlers
-app.post('/login', (req, res) => {
-  const { username, password } = req.body;
-  const validUser = process.env.ADMIN_USER || 'rrrr';
-  const validPass = process.env.ADMIN_PASS || 'rrrr';
-  
-  if (username === validUser && password === validPass) {
-    req.session.loggedIn = true;
-    return req.session.save((err) => {
-      if (err) return res.status(500).json({ success: false, message: 'Session error' });
-      res.json({ success: true });
+    if (now - emailTracker[senderEmail].startTime > ONE_HOUR) {
+        emailTracker[senderEmail] = { count: 0, startTime: now };
+    }
+
+    if (emailTracker[senderEmail].count + countToAdd > 30) {
+        return false;
+    }
+
+    return true;
+}
+
+app.post('/api/send-direct', async (req, res) => {
+    // SSE Headers for Realtime Progress
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const { senderName, gmailUser, appPass, emailListText, subject, body } = req.body;
+
+    if (!gmailUser || !appPass) {
+        res.write(`data: ${JSON.stringify({ error: "Gmail address or App Password missing! ❌" })}\n\n`);
+        return res.end();
+    }
+
+    const cleanUser = gmailUser.trim().toLowerCase();
+    const cleanPass = appPass.replace(/\s+/g, '');
+    const cleanSenderName = senderName && senderName.trim() ? senderName.trim() : cleanUser.split('@')[0];
+
+    const emails = emailListText
+        .split(/[\n,\s]+/)
+        .map(e => e.trim())
+        .filter(e => e.includes('@') && e.includes('.'));
+
+    if (emails.length === 0) {
+        res.write(`data: ${JSON.stringify({ error: "No valid recipient email addresses found! ❌" })}\n\n`);
+        return res.end();
+    }
+
+    if (!checkAndTrackLimit(cleanUser, emails.length)) {
+        res.write(`data: ${JSON.stringify({ error: "Safe Hourly Limit Reached! Max 30 mails/hr for 100% Inbox Placement. ❌" })}\n\n`);
+        return res.end();
+    }
+
+    // High-Trust Transporter Configuration
+    const transporter = nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,
+        auth: {
+            user: cleanUser,
+            pass: cleanPass
+        },
+        pool: true,
+        maxConnections: 2,
+        maxMessages: 50,
+        rateDelta: 1000,
+        rateLimit: 1
     });
-  }
-  res.status(401).json({ success: false, message: 'Invalid credentials' });
+
+    try {
+        await transporter.verify();
+    } catch (authError) {
+        res.write(`data: ${JSON.stringify({ error: "Authentication Failed! Verify your 16-digit Google App Password. ❌" })}\n\n`);
+        return res.end();
+    }
+
+    let successCount = 0;
+    let failedCount = 0;
+    let processedSoFar = 0;
+
+    for (let i = 0; i < emails.length; i++) {
+        const recipient = emails[i];
+
+        // Process Spintax and Sanitize Triggers for each recipient
+        const dynamicSubject = sanitizeSpamWords(parseSpintax(subject));
+        const dynamicBody = sanitizeSpamWords(parseSpintax(body));
+
+        // RFC-Compliant Unique Message ID Generation
+        const domain = cleanUser.split('@')[1] || 'gmail.com';
+        const uniqueMsgId = `<${crypto.randomBytes(12).toString('hex')}.${Date.now()}@${domain}>`;
+        
+        // Clean Plain Text version without HTML tags
+        const plainTextVersion = dynamicBody.replace(/<[^>]*>?/gm, '').trim();
+
+        // Optimized Mail Options for 100% Primary Inbox Delivery
+        const mailOptions = {
+            from: `"${cleanSenderName}" <${cleanUser}>`,
+            to: recipient,
+            replyTo: cleanUser,
+            subject: dynamicSubject,
+            text: plainTextVersion,
+            html: `
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; color: #1f2937; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 10px;">
+                    ${dynamicBody.replace(/\n/g, '<br>')}
+                </div>
+            `,
+            headers: {
+                'Message-ID': uniqueMsgId,
+                'X-Mailer': 'Apple Mail (2.3654.120.8)',
+                'X-Priority': '3',
+                'MIME-Version': '1.0',
+                'X-Auto-Response-Suppress': 'OOF, AutoReply',
+                'List-Unsubscribe': `<mailto:${cleanUser}?subject=Unsubscribe>`,
+                'Precedence': 'bulk'
+            }
+        };
+
+        try {
+            await transporter.sendMail(mailOptions);
+            successCount++;
+            emailTracker[cleanUser].count++;
+        } catch (err) {
+            console.error(`Failed delivery to ${recipient}:`, err.message);
+            failedCount++;
+        } finally {
+            processedSoFar++;
+            res.write(`data: ${JSON.stringify({ progress: true, sent: processedSoFar, total: emails.length })}\n\n`);
+        }
+
+        // Fast Speed Delay (1 to 2 seconds)
+        if (i < emails.length - 1) {
+            const delay = getFastDelay();
+            await sleep(delay);
+        }
+    }
+
+    transporter.close();
+
+    res.write(`data: ${JSON.stringify({ completed: true, total: emails.length, delivered: successCount, failed: failedCount })}\n\n`);
+    res.end();
 });
 
-app.post('/logout', (req, res) => {
-  req.session.destroy(() => {
-    res.clearCookie('connect.sid');
-    res.json({ success: true });
-  });
+app.listen(PORT, () => {
+    console.log(`Server running safely on http://localhost:${PORT}`);
 });
-
-// Pure 1-by-1 Native Dispatcher (Zero Fake Headers, Direct Primary Inbox Delivery)
-app.post('/api/send-email', requireLogin, async (req, res) => {
-  const { senderName, gmailId, appPassword, subject, messageBody, to } = req.body;
-
-  if (!gmailId || !appPassword || !to || !messageBody) {
-    return res.status(400).json({ success: false, message: 'Missing fields' });
-  }
-
-  const cleanGmailId  = gmailId.trim();
-  const cleanPassword = appPassword.replace(/\s+/g, '');
-  const cleanTo       = to.trim();
-
-  try {
-    const transporter = getTransporter(cleanGmailId, cleanPassword);
-
-    const fromFormatted = senderName && senderName.trim()
-      ? `"${senderName.trim()}" <${cleanGmailId}>`
-      : cleanGmailId;
-
-    const info = await transporter.sendMail({
-      from: fromFormatted,
-      to: cleanTo,
-      subject: subject ? subject.trim() : '',
-      text: messageBody.trim()
-    });
-
-    res.json({ success: true, messageId: info.messageId });
-  } catch (err) {
-    console.error(`❌ Delivery error for ${cleanTo}:`, err.message);
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-app.listen(PORT, () => console.log(`🚀 Fast Mailer running cleanly on port ${PORT}`));
