@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>High-Deliverability Direct Email Dispatcher</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #0f172a;
+            --muted: #64748b;
+            --border: #e2e8f0;
+            --success: #16a34a;
+            --error: #dc2626;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: var(--bg); color: var(--text); display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+        .container { background: var(--card-bg); width: 100%; max-width: 680px; padding: 32px; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); border: 1px solid var(--border); }
+        .header { margin-bottom: 24px; text-align: center; }
+        .header h1 { font-size: 22px; font-weight: 700; }
+        .header p { font-size: 13px; color: var(--muted); margin-top: 6px; }
+        .badge { display: inline-block; background: #dbeafe; color: #1e40af; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px; margin-bottom: 10px; }
+        .form-group { margin-bottom: 18px; }
+        .form-row { display: flex; gap: 16px; }
+        .form-row .form-group { flex: 1; }
+        label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+        input[type="text"], input[type="email"], input[type="password"], textarea { width: 100%; padding: 10px 14px; font-size: 14px; border: 1px solid var(--border); border-radius: 8px; outline: none; }
+        input:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+        .hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+        button { width: 100%; padding: 12px; background-color: var(--primary); color: white; font-size: 15px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; }
+        button:hover { background-color: var(--primary-hover); }
+        button:disabled { background-color: var(--muted); cursor: not-allowed; }
+        .progress-box { margin-top: 20px; padding: 16px; border-radius: 8px; background: #f1f5f9; display: none; }
+        .progress-bar-bg { width: 100%; height: 8px; background: #cbd5e1; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+        .progress-bar-fill { height: 100%; width: 0%; background: var(--primary); transition: width 0.3s ease; }
+        .status-text { font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; }
+        .result-msg { margin-top: 16px; padding: 12px; border-radius: 8px; font-size: 13px; font-weight: 500; display: none; }
+        .result-msg.success { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+        .result-msg.error { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <span class="badge">100% Primary Inbox Engine</span>
+        <h1>Direct Client Email Dispatcher</h1>
+        <p>Bypass Spam Filters with Smart Spintax & High-Trust Headers</p>
+    </div>
+
+    <form id="emailForm">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="senderName">Sender Name</label>
+                <input type="text" id="senderName" placeholder="e.g. Rahul Sharma" required>
+            </div>
+            <div class="form-group">
+                <label for="gmailUser">Gmail Address</label>
+                <input type="email" id="gmailUser" placeholder="yourname@gmail.com" required>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="appPass">Google 16-Digit App Password</label>
+            <input type="password" id="appPass" placeholder="xxxx xxxx xxxx xxxx" required>
+        </div>
+
+        <div class="form-group">
+            <label for="emailListText">Recipient Emails</label>
+            <textarea id="emailListText" rows="3" placeholder="client1@gmail.com, client2@yahoo.com" required></textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="subject">Subject Line</label>
+            <input type="text" id="subject" placeholder="{Quick Update|Important Info}: Project details" required>
+        </div>
+
+        <div class="form-group">
+            <label for="body">Message Body</label>
+            <textarea id="body" rows="6" placeholder="{Hi|Hello} {Friend|Client},&#10;&#10;Here are the project details..." required></textarea>
+        </div>
+
+        <button type="submit" id="submitBtn">Start Direct Inbox Dispatch</button>
+    </form>
+
+    <div class="progress-box" id="progressBox">
+        <div class="status-text">
+            <span id="statusLabel">Sending...</span>
+            <span id="statusCount">0 / 0</span>
+        </div>
+        <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="progressFill"></div>
+        </div>
+    </div>
+
+    <div class="result-msg" id="resultMsg"></div>
+</div>
+
+<script>
+    const form = document.getElementById('emailForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const progressBox = document.getElementById('progressBox');
+    const progressFill = document.getElementById('progressFill');
+    const statusLabel = document.getElementById('statusLabel');
+    const statusCount = document.getElementById('statusCount');
+    const resultMsg = document.getElementById('resultMsg');
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        resultMsg.style.display = 'none';
+        progressBox.style.display = 'block';
+        submitBtn.disabled = true;
+        progressFill.style.width = '0%';
+        statusLabel.innerText = 'Initializing Connection...';
+        statusCount.innerText = '0 / 0';
+
+        const payload = {
+            senderName: document.getElementById('senderName').value,
+            gmailUser: document.getElementById('gmailUser').value,
+            appPass: document.getElementById('appPass').value,
+            emailListText: document.getElementById('emailListText').value,
+            subject: document.getElementById('subject').value,
+            body: document.getElementById('body').value
+        };
+
+        try {
+            const response = await fetch('/api/send-direct', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n\n');
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = JSON.parse(line.replace('data: ', ''));
+
+                        if (data.error) {
+                            showResult(data.error, 'error');
+                            progressBox.style.display = 'none';
+                            submitBtn.disabled = false;
+                            return;
+                        }
+
+                        if (data.progress) {
+                            const percent = Math.round((data.sent / data.total) * 100);
+                            progressFill.style.width = percent + '%';
+                            statusLabel.innerText = 'Dispatching Mails...';
+                            statusCount.innerText = `${data.sent} / ${data.total}`;
+                        }
+
+                        if (data.completed) {
+                            showResult(`Completed successfully! Delivered: ${data.delivered}, Failed: ${data.failed}`, 'success');
+                            submitBtn.disabled = false;
+                        }
+                    }
+                }
+            }
+        } catch (err) {
+            showResult('Server Connection Failed! Check backend status.', 'error');
+            progressBox.style.display = 'none';
+            submitBtn.disabled = false;
+        }
+    });
+
+    function showResult(msg, type) {
+        resultMsg.innerText = msg;
+        resultMsg.className = `result-msg ${type}`;
+        resultMsg.style.display = 'block';
+    }
+</script>
+
+</body>
+</html>
