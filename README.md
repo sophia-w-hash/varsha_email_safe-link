@@ -1,13 +1,8 @@
-# Direct Email Dispatcher System
+# Instructions
 
-## Quick Setup Steps:
-1. Terminal / CMD mein folder open karein.
-2. Dependencies install karein:
-   `npm install`
-3. Application run karein:
-   `npm start`
-4. Browser mein kholein: `http://localhost:3000`
-
-## Crucial Rule for 100% Inbox Placement:
-- Body/Subject mein `{Hi|Hello|Hey}` jaisa **Spintax** zaroor use karein.
-- Ek baar mein 15-20 clients ko hi mail bhejein taaki Google filter account flagging se bache.
+1. `npm install` run karein.
+2. `npm start` se server shuru karein.
+3. Client ke Inbox mein mail bhejne ke sabse zaroori niyam:
+   - Body ke andar koi link (URL) ya phone number mat daalein.
+   - Ek din mein ek `@gmail.com` account se max 10-15 emails hi bhejein.
+   - Subject aur Body mein `{Hi|Hello}` jaise Spintax zaroor use karein.
