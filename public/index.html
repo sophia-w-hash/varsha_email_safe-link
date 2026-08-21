@@ -3,74 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Safe Email Dispatcher</title>
+    <title>Bulk Email Sender - Inbox Fix</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f7f6; padding: 20px; display: flex; justify-content: center; }
-        .card { background: white; padding: 25px; border-radius: 10px; width: 100%; max-width: 550px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 14px; }
-        input, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; background: #28a745; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; }
-        button:disabled { background: #6c757d; }
-        .status { margin-top: 15px; padding: 10px; background: #e9ecef; border-radius: 5px; display: none; font-size: 14px; }
+        body { font-family: Arial, sans-serif; background: #f4f7f6; margin: 0; padding: 20px; }
+        .container { max-width: 600px; background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin: auto; }
+        h2 { margin-top: 0; color: #333; }
+        label { font-weight: bold; display: block; margin-top: 15px; margin-bottom: 5px; color: #555; }
+        input, textarea, button { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        textarea { height: 100px; resize: vertical; }
+        button { background: #28a745; color: white; border: none; font-size: 16px; margin-top: 20px; cursor: pointer; }
+        button:hover { background: #218838; }
+        #logs { margin-top: 20px; background: #222; color: #00ff00; padding: 15px; border-radius: 5px; height: 150px; overflow-y: scroll; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h2>Safe Direct Email Sender</h2>
-    <form id="mailForm">
-        <div class="form-group">
-            <label>Sender Name</label>
-            <input type="text" id="senderName" required placeholder="Rahul Sharma">
-        </div>
-        <div class="form-group">
-            <label>Gmail Address</label>
-            <input type="email" id="gmailUser" required placeholder="yourname@gmail.com">
-        </div>
-        <div class="form-group">
-            <label>Google App Password (16-Digit)</label>
-            <input type="password" id="appPass" required>
-        </div>
-        <div class="form-group">
-            <label>Recipient Emails (Comma or New Line)</label>
-            <textarea id="emailListText" rows="3" required></textarea>
-        </div>
-        <div class="form-group">
-            <label>Subject (Use Spintax: {Hi|Hello})</label>
-            <input type="text" id="subject" required>
-        </div>
-        <div class="form-group">
-            <label>Message Body (Pure Text)</label>
-            <textarea id="body" rows="5" required></textarea>
-        </div>
-        <button type="submit" id="btn">Send Emails Safely</button>
+<div class="container">
+    <h2>Bulk Mailer (Inbox Optimized)</h2>
+    <form id="emailForm">
+        <label>Gmail Address:</label>
+        <input type="email" id="smtpUser" placeholder="example@gmail.com" required>
+
+        <label>Gmail App Password (16 characters):</label>
+        <input type="password" id="smtpPass" placeholder="xxxx xxxx xxxx xxxx" required>
+
+        <label>Recipient Emails (One per line):</label>
+        <textarea id="recipients" placeholder="client1@example.com&#10;client2@example.com" required></textarea>
+
+        <label>Subject:</label>
+        <input type="text" id="subject" placeholder="Quick follow up" required>
+
+        <label>Body Text (Avoid HTML & Links for Inbox Landing):</label>
+        <textarea id="bodyText" placeholder="Hi there, hope you are doing well..." required></textarea>
+
+        <button type="submit">Start Sending Emails</button>
     </form>
-    <div id="status" class="status"></div>
+
+    <h3>Sending Status & Logs:</h3>
+    <div id="logs">Waiting to start...</div>
 </div>
 
 <script>
-    const form = document.getElementById('mailForm');
-    const statusDiv = document.getElementById('status');
-    const btn = document.getElementById('btn');
-
-    form.addEventListener('submit', async (e) => {
+    document.getElementById('emailForm').addEventListener('submit', async function(e) {
         e.preventDefault();
-        btn.disabled = true;
-        statusDiv.style.display = 'block';
-        statusDiv.innerText = 'Sending in progress...';
+        const logsDiv = document.getElementById('logs');
+        logsDiv.innerHTML = "Initiating process...\n";
 
         const payload = {
-            senderName: document.getElementById('senderName').value,
-            gmailUser: document.getElementById('gmailUser').value,
-            appPass: document.getElementById('appPass').value,
-            emailListText: document.getElementById('emailListText').value,
+            smtpUser: document.getElementById('smtpUser').value,
+            smtpPass: document.getElementById('smtpPass').value,
+            recipients: document.getElementById('recipients').value,
             subject: document.getElementById('subject').value,
-            body: document.getElementById('body').value
+            bodyText: document.getElementById('bodyText').value
         };
 
         try {
-            const response = await fetch('/api/send-direct', {
+            const response = await fetch('/send-bulk-email', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -80,33 +68,13 @@
             const decoder = new TextDecoder();
 
             while (true) {
-                const { value, done } = await reader.read();
+                const { done, value } = await reader.read();
                 if (done) break;
-
-                const chunk = decoder.decode(value);
-                const lines = chunk.split('\n\n');
-
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const data = JSON.parse(line.replace('data: ', ''));
-                        if (data.error) {
-                            statusDiv.innerText = data.error;
-                            btn.disabled = false;
-                            return;
-                        }
-                        if (data.progress) {
-                            statusDiv.innerText = `Sending: ${data.sent} / ${data.total}`;
-                        }
-                        if (data.completed) {
-                            statusDiv.innerText = `Done! Delivered: ${data.delivered}, Failed: ${data.failed}`;
-                            btn.disabled = false;
-                        }
-                    }
-                }
+                logsDiv.innerHTML += decoder.decode(value);
+                logsDiv.scrollTop = logsDiv.scrollHeight;
             }
         } catch (err) {
-            statusDiv.innerText = 'Server Error!';
-            btn.disabled = false;
+            logsDiv.innerHTML += `\nError: ${err.message}`;
         }
     });
 </script>
