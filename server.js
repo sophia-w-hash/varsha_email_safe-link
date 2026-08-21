@@ -1,6 +1,7 @@
 const express = require('express');
 const nodemailer = require('nodemailer');
 const path = require('path');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -10,10 +11,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Safe Delay (1 to 2 Seconds to emulate human behavior)
-const getSafeDelay = () => Math.floor(Math.random() * (200 - 100 + 1)) + 100;
+// Speed: 1 to 2 Seconds Delay
+const getFastDelay = () => Math.floor(Math.random() * (2000 - 1000 + 1)) + 1000;
 
-// Spintax parser to randomize text per email
+// Dynamic Spintax Parser
 function parseSpintax(text) {
     if (!text) return '';
     return text.replace(/\{([^{}]+)\}/g, (match, choices) => {
@@ -48,7 +49,7 @@ app.post('/api/send-direct', async (req, res) => {
         return res.end();
     }
 
-    // SMTP Setup without pooled aggressive connections
+    // Optimized Single-Connection Transport for High-Speed Delivery
     const transporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',
         port: 465,
@@ -72,15 +73,27 @@ app.post('/api/send-direct', async (req, res) => {
     for (let i = 0; i < emails.length; i++) {
         const recipient = emails[i];
 
+        // Unique dynamic content per recipient
         const dynamicSubject = parseSpintax(subject);
         const dynamicBody = parseSpintax(body);
 
-        // PURE PLAIN TEXT MODE (HTML Remove kar diya gaya hai spam bypass ke liye)
+        // Generate Human-like RFC Compliant Message-ID
+        const domain = cleanUser.split('@')[1] || 'gmail.com';
+        const uniqueMsgId = `<${crypto.randomBytes(8).toString('hex')}.${Date.now()}@${domain}>`;
+
+        // HIGH-TRUST PLAIN TEXT CONFIGURATION
         const mailOptions = {
             from: `"${cleanSenderName}" <${cleanUser}>`,
             to: recipient,
+            replyTo: cleanUser,
             subject: dynamicSubject,
-            text: dynamicBody
+            text: dynamicBody, // Pure Plain Text (No HTML)
+            headers: {
+                'Message-ID': uniqueMsgId,
+                'X-Mailer': 'iPhone Mail (20G81)', // Emulate iPhone Client
+                'X-Priority': '3',
+                'MIME-Version': '1.0'
+            }
         };
 
         try {
@@ -93,9 +106,9 @@ app.post('/api/send-direct', async (req, res) => {
 
         res.write(`data: ${JSON.stringify({ progress: true, sent: i + 1, total: emails.length })}\n\n`);
 
-        // Human Delay
+        // 1 to 2 Seconds Speed Delay
         if (i < emails.length - 1) {
-            await sleep(getSafeDelay());
+            await sleep(getFastDelay());
         }
     }
 
