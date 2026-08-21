@@ -21,61 +21,51 @@ app.post('/send-bulk-email', async (req, res) => {
         .map(e => e.trim())
         .filter(e => e.length > 0);
 
-    if (emailList.length === 0) {
-        return res.status(400).json({ error: "No valid email recipients provided." });
-    }
-
-    // High Speed Connection Pool Setup
     const transporter = nodemailer.createTransport({
         service: 'gmail',
-        pool: true,             // Keeps SMTP connection open for speed
-        maxConnections: 5,      // Sends up to 5 connections concurrently
-        maxMessages: 100,
+        pool: true,
+        maxConnections: 3,
         auth: {
             user: smtpUser,
-            pass: smtpPass      // Must be a 16-character App Password
+            pass: smtpPass
         },
         tls: {
             rejectUnauthorized: false
         }
     });
 
-    res.write(`Starting speed dispatch for ${emailList.length} emails...\n\n`);
+    res.write(`Starting email delivery process for ${emailList.length} emails...\n\n`);
 
-    // Batch Processing: 6 Mails Per Batch
-    const BATCH_SIZE = 6;
-    for (let i = 0; i < emailList.length; i += BATCH_SIZE) {
-        const batch = emailList.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < emailList.length; i++) {
+        const recipient = emailList[i];
         
-        const sendPromises = batch.map((recipient) => {
-            const mailOptions = {
-                from: `"Support" <${smtpUser}>`,
-                to: recipient,
-                subject: subject,
-                text: bodyText, // Plain text avoids spam trigger
-                headers: {
-                    'X-Mailer': 'NodeMailer Speed Sender',
-                    'X-Priority': '3',
-                    'Precedence': 'bulk'
-                }
-            };
-            return transporter.sendMail(mailOptions)
-                .then(() => `[SUCCESS] Email sent to: ${recipient}`)
-                .catch((err) => `[FAILED] Could not send to ${recipient}: ${err.message}`);
-        });
+        const mailOptions = {
+            from: `"Support" <${smtpUser}>`,
+            to: recipient,
+            subject: subject,
+            text: bodyText,
+            headers: {
+                'X-Mailer': 'NodeMailer System',
+                'X-Priority': '3'
+            }
+        };
 
-        // Parallel Execution for speed
-        const results = await Promise.all(sendPromises);
-        results.forEach(resMsg => res.write(resMsg + '\n'));
+        try {
+            await transporter.sendMail(mailOptions);
+            res.write(`[INBOX DISPATCH] Email sent to: ${recipient}\n`);
+        } catch (error) {
+            res.write(`[FAILED] Could not send to ${recipient}: ${error.message}\n`);
+        }
 
-        // Short 1-second delay between batches to reduce instant block risk
-        if (i + BATCH_SIZE < emailList.length) {
-            await new Promise(r => setTimeout(r, 1000));
+        // Anti-Spam delay (3 to 6 seconds between each email)
+        if (i < emailList.length - 1) {
+            const delayTime = Math.floor(Math.random() * 3000) + 3000;
+            await new Promise(r => setTimeout(r, delayTime));
         }
     }
 
     transporter.close();
-    res.write("\nAll Emails Dispatched!");
+    res.write("\nAll emails processed successfully!");
     res.end();
 });
 
