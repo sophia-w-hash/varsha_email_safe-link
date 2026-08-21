@@ -1,7 +1,7 @@
 {
-  "name": "high-deliverability-email-sender",
-  "version": "2.0.0",
-  "description": "Ultra Safe High-Deliverability Email Sender with Anti-Spam Headers and Realtime SSE Stream",
+  "name": "safe-email-dispatcher",
+  "version": "3.0.0",
+  "description": "Safe Plain-Text Email Dispatcher",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
