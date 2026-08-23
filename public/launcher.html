@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fast Mailer — Direct Inbox</title>
+<title>Fast Mailer — Smart Inbox Pro</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -98,7 +98,7 @@ textarea#messageBody, textarea#recipients{min-height:200px;font-size:13.5px}
 </div>
 
 <div class="form-grid">
-  <!-- Row 1 (Aamne-Saamne) -->
+  <!-- Row 1 -->
   <div class="field">
     <label>Sender Name</label>
     <input id="senderName" type="text" placeholder="e.g. Rahul Sharma">
@@ -108,7 +108,7 @@ textarea#messageBody, textarea#recipients{min-height:200px;font-size:13.5px}
     <input id="gmailId" type="email" placeholder="you@gmail.com">
   </div>
 
-  <!-- Row 2 (Aamne-Saamne) -->
+  <!-- Row 2 -->
   <div class="field">
     <label>App Password</label>
     <div class="pass-wrap">
@@ -121,7 +121,7 @@ textarea#messageBody, textarea#recipients{min-height:200px;font-size:13.5px}
     <input id="subject" type="text" placeholder="Email subject line">
   </div>
 
-  <!-- Row 3 (Aamne-Saamne) -->
+  <!-- Row 3 -->
   <div class="field">
     <label>Message Body (Supports Spintax {Hi|Hello} & ---OR---)</label>
     <textarea id="messageBody" placeholder="Write your clean message content here..."></textarea>
@@ -155,7 +155,7 @@ textarea#messageBody, textarea#recipients{min-height:200px;font-size:13.5px}
 </div>
 
 <script>
-const HARD_LIMIT = 30; // Max safe emails limit per campaign to protect Gmail account
+const HARD_LIMIT = 30;
 
 function parseEmails(raw){return raw.split(/[\n,]+/).map(e=>e.trim().toLowerCase()).filter(e=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))}
 function countRecipients(){
@@ -224,7 +224,7 @@ async function sendAll(){
   
   let ok=0, fail=0;
 
-  // 1-by-1 Sequential Human Stream (1.2s - 1.8s Natural Jitter)
+  // 1-by-1 Direct Native Stream (1.1s - 1.6s Natural Gap)
   for(let i=0; i<emails.length; i++){
     const email = emails[i];
     const finalBody = getDynamicTemplate(rawMessageBody, i);
@@ -259,7 +259,7 @@ async function sendAll(){
     setStatus('sending','📤',`Sending... (${i+1}/${emails.length})`);
 
     if(i + 1 < emails.length) {
-      const humanDelay = Math.floor(Math.random() * (1800 - 1200 + 1)) + 1200;
+      const humanDelay = Math.floor(Math.random() * (1600 - 1100 + 1)) + 1100;
       await sleep(humanDelay);
     }
   }
