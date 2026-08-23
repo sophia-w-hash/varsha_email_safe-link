@@ -14,7 +14,7 @@ app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'fast-mailer-clean-inbox-2026',
+  secret: process.env.SESSION_SECRET || 'fast-mailer-clean-core-2026',
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -82,7 +82,7 @@ app.post('/logout', (req, res) => {
   });
 });
 
-// Pure Clean Text Dispatcher (Zero Fake Headers - Native Google Signatures)
+// Pure Clean Text Dispatcher (Direct Primary Inbox Architecture)
 app.post('/api/send-email', requireLogin, async (req, res) => {
   const { senderName, gmailId, appPassword, subject, messageBody, to } = req.body;
 
@@ -101,6 +101,7 @@ app.post('/api/send-email', requireLogin, async (req, res) => {
       ? `"${senderName.trim()}" <${cleanGmailId}>`
       : cleanGmailId;
 
+    // Pure Clean Native Send (No custom IDs, no wrappers, 100% native DKIM/SPF)
     const info = await transporter.sendMail({
       from: fromFormatted,
       to: cleanTo,
