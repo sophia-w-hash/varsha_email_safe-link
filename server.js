@@ -1,119 +1,92 @@
-const express    = require('express');
-const session    = require('express-session');
-const bodyParser = require('body-parser');
+const express = require('express');
 const nodemailer = require('nodemailer');
-const path       = require('path');
-require('dotenv').config();
+const cors = require('cors');
+const path = require('path');
+const crypto = require('crypto');
 
-const app  = express();
-const PORT = process.env.PORT || 3000;
-
-app.set('trust proxy', 1);
-
-app.use(bodyParser.json({ limit: '10mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
-
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'fast-mailer-clean-core-2026',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 1000 * 60 * 60 * 12
-  }
-}));
+const app = express();
+app.use(express.json());
+app.use(cors());
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Persistent Single Transporter Pool
-const transporterCache = {};
+app.post('/send-bulk-email', async (req, res) => {
+    const { senderName, smtpUser, smtpPass, recipients, subject, bodyText } = req.body;
 
-function getTransporter(gmailId, appPassword) {
-  const cacheKey = `${gmailId}:${appPassword}`;
-  if (!transporterCache[cacheKey]) {
-    transporterCache[cacheKey] = nodemailer.createTransport({
-      service: 'gmail',
-      pool: true,
-      maxConnections: 3,
-      maxMessages: 100,
-      auth: { user: gmailId, pass: appPassword }
-    });
-  }
-  return transporterCache[cacheKey];
-}
+    if (!smtpUser || !smtpPass || !recipients || !subject || !bodyText) {
+        return res.status(400).json({ error: "All fields are required!" });
+    }
 
-function requireLogin(req, res, next) {
-  if (req.session?.loggedIn) return next();
-  res.redirect('/');
-}
+    const emailList = recipients
+        .split('\n')
+        .map(e => e.trim())
+        .filter(e => e.length > 0);
 
-// Routes
-app.get('/', (req, res) => {
-  if (req.session?.loggedIn) return res.redirect('/launcher');
-  res.sendFile(path.join(__dirname, 'public', 'login.html'));
-});
+    let sent = 0;
+    let failed = 0;
+    const total = emailList.length;
 
-app.get('/launcher', requireLogin, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'launcher.html'));
-});
-
-// Authentication Handlers
-app.post('/login', (req, res) => {
-  const { username, password } = req.body;
-  const validUser = process.env.ADMIN_USER || 'rrrr';
-  const validPass = process.env.ADMIN_PASS || 'rrrr';
-  
-  if (username === validUser && password === validPass) {
-    req.session.loggedIn = true;
-    return req.session.save((err) => {
-      if (err) return res.status(500).json({ success: false, message: 'Session error' });
-      res.json({ success: true });
-    });
-  }
-  res.status(401).json({ success: false, message: 'Invalid credentials' });
-});
-
-app.post('/logout', (req, res) => {
-  req.session.destroy(() => {
-    res.clearCookie('connect.sid');
-    res.json({ success: true });
-  });
-});
-
-// Pure Clean Text Dispatcher (Direct Primary Inbox Architecture)
-app.post('/api/send-email', requireLogin, async (req, res) => {
-  const { senderName, gmailId, appPassword, subject, messageBody, to } = req.body;
-
-  if (!gmailId || !appPassword || !to || !messageBody) {
-    return res.status(400).json({ success: false, message: 'Missing fields' });
-  }
-
-  const cleanGmailId  = gmailId.trim();
-  const cleanPassword = appPassword.replace(/\s+/g, '');
-  const cleanTo       = to.trim();
-
-  try {
-    const transporter = getTransporter(cleanGmailId, cleanPassword);
-
-    const fromFormatted = senderName && senderName.trim()
-      ? `"${senderName.trim()}" <${cleanGmailId}>`
-      : cleanGmailId;
-
-    // Pure Clean Native Send (No custom IDs, no wrappers, 100% native DKIM/SPF)
-    const info = await transporter.sendMail({
-      from: fromFormatted,
-      to: cleanTo,
-      subject: subject ? subject.trim() : '',
-      text: messageBody.trim()
+    // Direct Secure SMTP Transport
+    const transporter = nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true, // SSL Connection
+        auth: {
+            user: smtpUser,
+            pass: smtpPass
+        }
     });
 
-    res.json({ success: true, messageId: info.messageId });
-  } catch (err) {
-    console.error(`❌ Delivery error for ${cleanTo}:`, err.message);
-    res.status(500).json({ success: false, message: err.message });
-  }
+    // Step 1: Real-time SMTP Check
+    try {
+        await transporter.verify();
+        res.write("[SECURITY] SMTP Authentication Verified Successfully!\n\n");
+    } catch (err) {
+        res.write(`[SMTP ERROR] Verification Failed: ${err.message}\n`);
+        return res.end();
+    }
+
+    // Step 2: Safe Inbox Dispatch Loop
+    for (let i = 0; i < total; i++) {
+        const recipient = emailList[i];
+        const rem = total - (sent + failed + 1);
+
+        // Standard RFC Message-ID (Anti-Spam RFC Standard)
+        const domain = smtpUser.split('@')[1] || 'gmail.com';
+        const uniqueMsgId = `<${crypto.randomBytes(12).toString('hex')}@${domain}>`;
+
+        const mailOptions = {
+            from: `"${senderName}" <${smtpUser}>`,
+            to: recipient,
+            subject: subject,
+            text: bodyText, // Plain text for max inbox delivery
+            messageId: uniqueMsgId,
+            date: new Date()
+        };
+
+        try {
+            await transporter.sendMail(mailOptions);
+            sent++;
+            res.write(`[INBOX DISPATCH] Email sent to: ${recipient}\n`);
+        } catch (error) {
+            failed++;
+            res.write(`[FAILED] Error sending to ${recipient}: ${error.message}\n`);
+        }
+
+        // Live Log Update for UI Counter
+        res.write(`[COUNT_UPDATE] Total:${total} Sent:${sent} Failed:${failed} Rem:${rem}\n`);
+
+        // Natural Human-like Delay (25 to 45 seconds gap)
+        if (i < total - 1) {
+            const delayTime = Math.floor(Math.random() * (45000 - 25000 + 1)) + 25000;
+            res.write(`[WARMUP DELAY] Pausing ${Math.round(delayTime / 1000)}s to protect domain reputation...\n\n`);
+            await new Promise(r => setTimeout(r, delayTime));
+        }
+    }
+
+    res.write("\nCampaign Completed Successfully!");
+    res.end();
 });
 
-app.listen(PORT, () => console.log(`🚀 Fast Mailer running cleanly on port ${PORT}`));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
