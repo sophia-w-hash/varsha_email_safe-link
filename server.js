@@ -1,83 +1,118 @@
-const express = require('express');
+const express    = require('express');
+const session    = require('express-session');
+const bodyParser = require('body-parser');
 const nodemailer = require('nodemailer');
-const cors = require('cors');
-const path = require('path');
+const path       = require('path');
+require('dotenv').config();
 
-const app = express();
-app.use(express.json());
-app.use(cors());
+const app  = express();
+const PORT = process.env.PORT || 3000;
+
+app.set('trust proxy', 1);
+
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
+
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'fast-mailer-clean-core-2026',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 1000 * 60 * 60 * 12
+  }
+}));
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.post('/send-bulk-email', async (req, res) => {
-    const { senderName, smtpUser, smtpPass, recipients, subject, bodyText } = req.body;
+// Persistent Single Transporter Pool (Clean Socket Reuse)
+const transporterCache = {};
 
-    if (!senderName || !smtpUser || !smtpPass || !recipients || !subject || !bodyText) {
-        return res.status(400).json({ error: "All fields are required!" });
-    }
-
-    const emailList = recipients
-        .split('\n')
-        .map(e => e.trim())
-        .filter(e => e.length > 0);
-
-    let sent = 0;
-    let failed = 0;
-    const total = emailList.length;
-
-    // Standard Gmail Transporter
-    const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: smtpUser,
-            pass: smtpPass
-        }
+function getTransporter(gmailId, appPassword) {
+  const cacheKey = `${gmailId}:${appPassword}`;
+  if (!transporterCache[cacheKey]) {
+    transporterCache[cacheKey] = nodemailer.createTransport({
+      service: 'gmail',
+      pool: true,
+      maxConnections: 3,
+      maxMessages: 100,
+      auth: { user: gmailId, pass: appPassword }
     });
+  }
+  return transporterCache[cacheKey];
+}
 
-    // Step 1: SMTP Connection Check
-    try {
-        await transporter.verify();
-        res.write("[STATUS] SMTP Connection Successful.\n\n");
-    } catch (err) {
-        res.write(`[ERROR] Invalid Credentials: ${err.message}\n`);
-        return res.end();
-    }
+function requireLogin(req, res, next) {
+  if (req.session?.loggedIn) return next();
+  res.redirect('/');
+}
 
-    // Step 2: Clean Sequential Sending
-    for (let i = 0; i < total; i++) {
-        const recipient = emailList[i];
-        const rem = total - (sent + failed + 1);
-
-        const mailOptions = {
-            from: `"${senderName}" <${smtpUser}>`,
-            to: recipient,
-            subject: subject,
-            text: bodyText // Pure plain text (Safest)
-        };
-
-        try {
-            await transporter.sendMail(mailOptions);
-            sent++;
-            res.write(`[SUCCESS] Email sent to: ${recipient}\n`);
-        } catch (error) {
-            failed++;
-            res.write(`[FAILED] Error for ${recipient}: ${error.message}\n`);
-        }
-
-        // Live Log Update
-        res.write(`[COUNT_UPDATE] Total:${total} Sent:${sent} Failed:${failed} Rem:${rem}\n`);
-
-        // Natural Sending Delay (25 to 40 Seconds)
-        if (i < total - 1) {
-            const delayTime = Math.floor(Math.random() * (40000 - 25000 + 1)) + 25000;
-            res.write(`[WAITING] Delay for ${Math.round(delayTime / 1000)}s...\n\n`);
-            await new Promise(r => setTimeout(r, delayTime));
-        }
-    }
-
-    res.write("\nProcess Completed.");
-    res.end();
+// Page Routes
+app.get('/', (req, res) => {
+  if (req.session?.loggedIn) return res.redirect('/launcher');
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+app.get('/launcher', requireLogin, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'launcher.html'));
+});
+
+// Auth Handlers
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  const validUser = process.env.ADMIN_USER || 'rrrr';
+  const validPass = process.env.ADMIN_PASS || 'rrrr';
+  
+  if (username === validUser && password === validPass) {
+    req.session.loggedIn = true;
+    return req.session.save((err) => {
+      if (err) return res.status(500).json({ success: false, message: 'Session error' });
+      res.json({ success: true });
+    });
+  }
+  res.status(401).json({ success: false, message: 'Invalid credentials' });
+});
+
+app.post('/logout', (req, res) => {
+  req.session.destroy(() => {
+    res.clearCookie('connect.sid');
+    res.json({ success: true });
+  });
+});
+
+// Pure 1-by-1 Native Dispatcher (Zero Fake Headers, Direct Primary Inbox Delivery)
+app.post('/api/send-email', requireLogin, async (req, res) => {
+  const { senderName, gmailId, appPassword, subject, messageBody, to } = req.body;
+
+  if (!gmailId || !appPassword || !to || !messageBody) {
+    return res.status(400).json({ success: false, message: 'Missing fields' });
+  }
+
+  const cleanGmailId  = gmailId.trim();
+  const cleanPassword = appPassword.replace(/\s+/g, '');
+  const cleanTo       = to.trim();
+
+  try {
+    const transporter = getTransporter(cleanGmailId, cleanPassword);
+
+    const fromFormatted = senderName && senderName.trim()
+      ? `"${senderName.trim()}" <${cleanGmailId}>`
+      : cleanGmailId;
+
+    const info = await transporter.sendMail({
+      from: fromFormatted,
+      to: cleanTo,
+      subject: subject ? subject.trim() : '',
+      text: messageBody.trim()
+    });
+
+    res.json({ success: true, messageId: info.messageId });
+  } catch (err) {
+    console.error(`❌ Delivery error for ${cleanTo}:`, err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.listen(PORT, () => console.log(`🚀 Fast Mailer running cleanly on port ${PORT}`));
