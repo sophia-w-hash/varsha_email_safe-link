@@ -27,7 +27,7 @@ app.use(session({
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Persistent Transporter Pool with Anti-Spam Socket Settings
+// Persistent Single Transporter Pool (Optimal for 6 Parallel Batching)
 const transporterCache = {};
 
 function getTransporter(gmailId, appPassword) {
@@ -36,10 +36,10 @@ function getTransporter(gmailId, appPassword) {
     transporterCache[cacheKey] = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 465,
-      secure: true, // SSL Connection
+      secure: true,
       pool: true,
-      maxConnections: 2, // Controlled concurrent sockets for Google limit safety
-      maxMessages: 50,
+      maxConnections: 6, // Matches the batch size for instantaneous socket release
+      maxMessages: 100,
       auth: { user: gmailId, pass: appPassword },
       tls: {
         rejectUnauthorized: true
@@ -54,7 +54,6 @@ function requireLogin(req, res, next) {
   res.redirect('/');
 }
 
-// Page Routes
 app.get('/', (req, res) => {
   if (req.session?.loggedIn) return res.redirect('/launcher');
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
@@ -64,7 +63,6 @@ app.get('/launcher', requireLogin, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'launcher.html'));
 });
 
-// Auth Handlers
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
   const validUser = process.env.ADMIN_USER || 'rrrr';
@@ -87,18 +85,17 @@ app.post('/logout', (req, res) => {
   });
 });
 
-// Optimized Email Sending API
+// Single Email API Executed in Batches
 app.post('/api/send-email', requireLogin, async (req, res) => {
   const { senderName, gmailId, appPassword, subject, messageBody, to } = req.body;
 
   if (!gmailId || !appPassword || !to || !messageBody) {
-    return res.status(400).json({ success: false, message: 'Missing required fields' });
+    return res.status(400).json({ success: false, message: 'Missing fields' });
   }
 
   const cleanGmailId  = gmailId.trim();
   const cleanPassword = appPassword.replace(/\s+/g, '');
   const cleanTo       = to.trim();
-  const cleanSubject  = subject ? subject.trim() : 'Notification';
 
   try {
     const transporter = getTransporter(cleanGmailId, cleanPassword);
@@ -107,25 +104,17 @@ app.post('/api/send-email', requireLogin, async (req, res) => {
       ? `"${senderName.trim()}" <${cleanGmailId}>`
       : cleanGmailId;
 
-    // Inboxing Optimization: Add Clean HTML Version Alongside Text
-    const htmlBody = `
-      <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6;">
-        ${messageBody.trim().replace(/\n/g, '<br>')}
-      </div>
-    `;
-
-    // Natural Delay to Avoid Immediate Google Rate Limit Trigger
-    const randomDelay = Math.floor(Math.random() * (3500 - 1500 + 1)) + 1500;
-    await new Promise(resolve => setTimeout(resolve, randomDelay));
+    // Direct Primary Inbox Delivery MIME Config
+    const htmlContent = `<div style="font-family:Arial,sans-serif;font-size:15px;color:#222;line-height:1.5;">${messageBody.trim().replace(/\n/g, '<br>')}</div>`;
 
     const info = await transporter.sendMail({
       from: fromFormatted,
       to: cleanTo,
-      subject: cleanSubject,
+      subject: subject ? subject.trim() : '',
       text: messageBody.trim(),
-      html: htmlBody,
+      html: htmlContent,
       headers: {
-        'X-Mailer': 'Microsoft Outlook 16.0', // Standard mail client header signature
+        'X-Mailer': 'Outlook-Express/7.0',
         'X-Priority': '3',
         'Importance': 'Normal'
       }
