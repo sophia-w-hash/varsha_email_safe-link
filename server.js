@@ -27,18 +27,23 @@ app.use(session({
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Persistent Single Transporter Pool (Clean Socket Reuse)
+// Persistent Transporter Pool with Anti-Spam Socket Settings
 const transporterCache = {};
 
 function getTransporter(gmailId, appPassword) {
   const cacheKey = `${gmailId}:${appPassword}`;
   if (!transporterCache[cacheKey]) {
     transporterCache[cacheKey] = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true, // SSL Connection
       pool: true,
-      maxConnections: 3,
-      maxMessages: 100,
-      auth: { user: gmailId, pass: appPassword }
+      maxConnections: 2, // Controlled concurrent sockets for Google limit safety
+      maxMessages: 50,
+      auth: { user: gmailId, pass: appPassword },
+      tls: {
+        rejectUnauthorized: true
+      }
     });
   }
   return transporterCache[cacheKey];
@@ -82,17 +87,18 @@ app.post('/logout', (req, res) => {
   });
 });
 
-// Pure 1-by-1 Native Dispatcher (Zero Fake Headers, Direct Primary Inbox Delivery)
+// Optimized Email Sending API
 app.post('/api/send-email', requireLogin, async (req, res) => {
   const { senderName, gmailId, appPassword, subject, messageBody, to } = req.body;
 
   if (!gmailId || !appPassword || !to || !messageBody) {
-    return res.status(400).json({ success: false, message: 'Missing fields' });
+    return res.status(400).json({ success: false, message: 'Missing required fields' });
   }
 
   const cleanGmailId  = gmailId.trim();
   const cleanPassword = appPassword.replace(/\s+/g, '');
   const cleanTo       = to.trim();
+  const cleanSubject  = subject ? subject.trim() : 'Notification';
 
   try {
     const transporter = getTransporter(cleanGmailId, cleanPassword);
@@ -101,11 +107,28 @@ app.post('/api/send-email', requireLogin, async (req, res) => {
       ? `"${senderName.trim()}" <${cleanGmailId}>`
       : cleanGmailId;
 
+    // Inboxing Optimization: Add Clean HTML Version Alongside Text
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6;">
+        ${messageBody.trim().replace(/\n/g, '<br>')}
+      </div>
+    `;
+
+    // Natural Delay to Avoid Immediate Google Rate Limit Trigger
+    const randomDelay = Math.floor(Math.random() * (3500 - 1500 + 1)) + 1500;
+    await new Promise(resolve => setTimeout(resolve, randomDelay));
+
     const info = await transporter.sendMail({
       from: fromFormatted,
       to: cleanTo,
-      subject: subject ? subject.trim() : '',
-      text: messageBody.trim()
+      subject: cleanSubject,
+      text: messageBody.trim(),
+      html: htmlBody,
+      headers: {
+        'X-Mailer': 'Microsoft Outlook 16.0', // Standard mail client header signature
+        'X-Priority': '3',
+        'Importance': 'Normal'
+      }
     });
 
     res.json({ success: true, messageId: info.messageId });
